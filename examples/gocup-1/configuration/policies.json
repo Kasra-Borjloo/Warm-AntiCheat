@@ -1,0 +1,20 @@
+{
+  "app_policy": {
+    "prohibited_executables": [
+      "ollama",
+      "ollama.exe",
+      "lmstudio.exe",
+      "llama-cli.exe"
+    ]
+  },
+  "browser_policy": {
+    "restricted_domains": [
+      "chatgpt.com",
+      "claude.ai",
+      "gemini.google.com"
+    ]
+  },
+  "heartbeat_interval_secs": 15,
+  "max_interruption_gap_secs": 60,
+  "retention_days": 30
+}

@@ -1,0 +1,41 @@
+{
+  "contest": {
+    "id": "gocup-1",
+    "uuid": "3beefbc0-c191-413b-87d5-71725a08aeaa",
+    "title": "GOCUP 1",
+    "organizer": "Sharif University Computer Society",
+    "description": "Official Algorithmic Contest",
+    "start_time": "2026-11-07T06:51:44.986676Z",
+    "end_time": "2026-11-07T11:51:44.986676Z",
+    "created_at": "2026-11-07T06:51:44.986810500Z",
+    "retention_days": 30
+  },
+  "policy": {
+    "app_policy": {
+      "prohibited_executables": [
+        "ollama",
+        "ollama.exe",
+        "lmstudio.exe",
+        "llama-cli.exe"
+      ]
+    },
+    "browser_policy": {
+      "restricted_domains": [
+        "chatgpt.com",
+        "claude.ai",
+        "gemini.google.com"
+      ]
+    },
+    "heartbeat_interval_secs": 15,
+    "max_interruption_gap_secs": 60,
+    "retention_days": 30
+  },
+  "judge_public_key_hex": "64653cc820264a34a23392747484db156094969685c463a5736c854d329f8d70",
+  "manifest_signing_key_pub_hex": "b9a005965a9a0d7c9f9b13d9a7ee777fbd18be3819748af2efcf8076793daf22",
+  "client_binary_checksums": {
+    "linux-x86_64": "PENDING_BUILD",
+    "macos-universal": "PENDING_BUILD",
+    "windows-x86_64": "PENDING_BUILD"
+  },
+  "created_at": "2026-11-07T06:51:44.994115800Z"
+}

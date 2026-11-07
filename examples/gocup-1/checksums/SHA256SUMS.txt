@@ -1,0 +1,1 @@
+5fb0cca86c50d13bd3a17fbc88aeb51370da78a5fa5f5b68482d9d359e62c82d  manifests/contest_manifest.json

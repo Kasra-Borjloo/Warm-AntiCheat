@@ -149,6 +149,14 @@ impl SqliteAuditStore {
         Ok(())
     }
 
+    /// Force a WAL checkpoint to flush all committed transactions into the main database file.
+    pub fn checkpoint(&self) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
+            .map_err(|e| WarmError::Storage(format!("WAL checkpoint failed: {e}")))?;
+        Ok(())
+    }
+
     /// Retrieve the highest recorded sequence number and its event hash for resuming state.
     pub fn get_latest_event_info(&self) -> Result<Option<(u64, String)>> {
         let conn = self.conn.lock().unwrap();

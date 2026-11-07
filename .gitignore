@@ -22,3 +22,6 @@ Thumbs.db
 *.sqlite-journal
 *.sqlite-wal
 export/
+*.priv
+*.key
+**/*.priv
