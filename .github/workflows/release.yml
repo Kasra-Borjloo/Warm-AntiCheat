@@ -21,7 +21,7 @@ jobs:
             artifact_name: warm-contest-maker-windows-x86_64.zip
             platform: windows
             arch: x86_64
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             artifact_name: warm-contest-maker-linux-x86_64.tar.gz
             platform: linux
@@ -121,7 +121,7 @@ jobs:
               artifacts,
               supported_platforms: [
                 "Windows (x86_64, Windows 10/11)",
-                "Linux (x86_64, Ubuntu 20.04+, Debian 11+, Fedora 36+)",
+                "Linux (Universal x86_64: Ubuntu, Debian, Fedora, Arch Linux, openSUSE, Rocky/RHEL)",
                 "macOS (Apple Silicon M1/M2/M3 & Intel x86_64, macOS 12+)"
               ],
               unsupported_platforms: [

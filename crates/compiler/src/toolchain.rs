@@ -118,6 +118,9 @@ impl BundledToolchain {
         {
             candidates.push(PathBuf::from("/usr"));
             candidates.push(PathBuf::from("/usr/local"));
+            candidates.push(PathBuf::from("/opt/gcc"));
+            candidates.push(PathBuf::from("/opt"));
+            candidates.push(PathBuf::from("/run/current-system/sw"));
         }
 
         for c in &candidates {

@@ -237,6 +237,28 @@ fn get_potential_removable_roots() -> Vec<PathBuf> {
 
     #[cfg(target_os = "linux")]
     {
+        if let Ok(mounts_content) = fs::read_to_string("/proc/mounts") {
+            for line in mounts_content.lines() {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    let dev = parts[0];
+                    let mount_point = parts[1];
+                    if dev.starts_with("/dev/sd")
+                        || dev.starts_with("/dev/mmcblk")
+                        || dev.starts_with("/dev/nvme")
+                        || mount_point.starts_with("/media")
+                        || mount_point.starts_with("/run/media")
+                        || mount_point.starts_with("/mnt")
+                    {
+                        let path = PathBuf::from(mount_point);
+                        if path.exists() && path.is_dir() && !roots.contains(&path) {
+                            roots.push(path);
+                        }
+                    }
+                }
+            }
+        }
+
         for base in ["/media", "/run/media", "/mnt"] {
             let p = std::path::Path::new(base);
             if p.exists() && p.is_dir() {
@@ -244,11 +266,16 @@ fn get_potential_removable_roots() -> Vec<PathBuf> {
                     for entry in entries.flatten() {
                         let sub = entry.path();
                         if sub.is_dir() {
-                            roots.push(sub.clone());
+                            if !roots.contains(&sub) {
+                                roots.push(sub.clone());
+                            }
                             if let Ok(sub_entries) = fs::read_dir(&sub) {
                                 for sub_entry in sub_entries.flatten() {
                                     if sub_entry.path().is_dir() {
-                                        roots.push(sub_entry.path());
+                                        let nested = sub_entry.path();
+                                        if !roots.contains(&nested) {
+                                            roots.push(nested);
+                                        }
                                     }
                                 }
                             }
