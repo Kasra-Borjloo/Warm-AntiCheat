@@ -22,6 +22,58 @@ const state = {
   pdfBase64: ''
 };
 
+function showToast(message, type = 'info', duration = 3500) {
+  let toastContainer = document.getElementById('toastContainer');
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'toastContainer';
+    toastContainer.style.cssText = 'position:fixed; bottom:20px; right:20px; z-index:99999; display:flex; flex-direction:column; gap:8px; pointer-events:none;';
+    document.body.appendChild(toastContainer);
+  }
+  const toast = document.createElement('div');
+  const bg = type === 'error' ? '#ef4444' : (type === 'success' ? '#22c55e' : (type === 'warning' ? '#f59e0b' : '#0284c7'));
+  toast.style.cssText = `background:${bg}; color:#ffffff; padding:10px 16px; border-radius:6px; font-size:0.875rem; font-weight:500; box-shadow:0 4px 12px rgba(0,0,0,0.3); pointer-events:auto; transition:opacity 0.25s ease; max-width:400px; word-break:break-word;`;
+  toast.textContent = message;
+  toastContainer.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
+function showConfirmDialog(title, message, onConfirm) {
+  let modalOverlay = document.getElementById('confirmModalOverlay');
+  if (!modalOverlay) {
+    modalOverlay = document.createElement('div');
+    modalOverlay.id = 'confirmModalOverlay';
+    modalOverlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:99998; display:flex; align-items:center; justify-content:center;';
+    modalOverlay.innerHTML = `
+      <div style="background:var(--card-bg, #1e293b); border:1px solid var(--border-color, #334155); border-radius:8px; width:90%; max-width:420px; padding:1.5rem; box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+        <h3 id="confirmModalTitle" style="margin-top:0; color:var(--text-main, #f8fafc); font-size:1.1rem;"></h3>
+        <p id="confirmModalMessage" style="font-size:0.9rem; color:var(--text-muted, #94a3b8); margin-bottom:1.5rem; line-height:1.4;"></p>
+        <div style="display:flex; justify-content:flex-end; gap:0.75rem;">
+          <button class="btn btn-secondary" id="confirmModalCancelBtn">Cancel</button>
+          <button class="btn btn-primary" id="confirmModalOkBtn">Confirm</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modalOverlay);
+    document.getElementById('confirmModalCancelBtn').addEventListener('click', () => {
+      modalOverlay.style.display = 'none';
+    });
+  }
+  document.getElementById('confirmModalTitle').textContent = title;
+  document.getElementById('confirmModalMessage').textContent = message;
+  const okBtn = document.getElementById('confirmModalOkBtn');
+  const newOkBtn = okBtn.cloneNode(true);
+  okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+  newOkBtn.addEventListener('click', () => {
+    modalOverlay.style.display = 'none';
+    if (onConfirm) onConfirm();
+  });
+  modalOverlay.style.display = 'flex';
+}
+
 const contestTitleInput = document.getElementById('contestTitle');
 const contestIdInput = document.getElementById('contestId');
 const organizerNameInput = document.getElementById('organizerName');
@@ -184,11 +236,12 @@ async function triggerGenerateAccounts() {
         accountsStatusBadge.textContent = `${res.count} Accounts Generated (Argon2id Salted Hashes)`;
         renderAccountsTable();
         if (window.replaceLucideIcons) window.replaceLucideIcons();
+        showToast(`${res.count} participant accounts preview generated`, 'success');
       } else {
-        alert('Account generation failed: ' + res.error);
+        showToast('Account generation failed: ' + res.error, 'error');
       }
     } catch (err) {
-      alert('IPC error: ' + err);
+      showToast('IPC error: ' + err, 'error');
     }
   } else {
     state.accountsList = Array.from({ length: count }, (_, i) => ({
@@ -217,9 +270,11 @@ previewAccountsBtn.addEventListener('click', (e) => {
 
 regenerateAccountsBtn.addEventListener('click', (e) => {
   e.preventDefault();
-  if (confirm('Regenerate all participant passwords? Existing un-exported credentials will be replaced.')) {
-    triggerGenerateAccounts();
-  }
+  showConfirmDialog(
+    'Regenerate Accounts',
+    'Regenerate all participant passwords? Existing un-exported credentials will be replaced.',
+    () => { triggerGenerateAccounts(); }
+  );
 });
 
 downloadCsvBtn.addEventListener('click', async (e) => {
@@ -234,14 +289,15 @@ downloadCsvBtn.addEventListener('click', async (e) => {
         defaultName,
         content: state.csvContent
       });
-      alert(`Credentials CSV exported successfully:\n${saved}`);
+      showToast(`Credentials CSV exported: ${saved}`, 'success');
     } catch (err) {
       if (err !== 'Export cancelled by user') {
-        alert('Failed to export CSV: ' + err);
+        showToast('Failed to export CSV: ' + err, 'error');
       }
     }
   } else {
     downloadBrowserBlob(defaultName, state.csvContent, 'text/csv');
+    showToast('Credentials CSV exported', 'success');
   }
 });
 
@@ -257,14 +313,14 @@ downloadPdfBtn.addEventListener('click', async (e) => {
         defaultName,
         content: state.pdfBase64
       });
-      alert(`Printable Credentials PDF exported successfully:\n${saved}`);
+      showToast(`Printable Credentials PDF exported: ${saved}`, 'success');
     } catch (err) {
       if (err !== 'Export cancelled by user') {
-        alert('Failed to export PDF: ' + err);
+        showToast('Failed to export PDF: ' + err, 'error');
       }
     }
   } else {
-    alert('PDF export available in native desktop application.');
+    showToast('PDF export available in native desktop application.', 'warning');
   }
 });
 
@@ -422,7 +478,8 @@ generateBtn.addEventListener('click', async () => {
     output_dir: outDir,
     enable_cpp_compiler: document.getElementById('enableCppCompiler')?.checked || false,
     participation_mode: isAccounts ? 'generated_accounts' : 'no_accounts',
-    account_count: isAccounts ? count : 0
+    account_count: isAccounts ? count : 0,
+    pregenerated_records: (isAccounts && state.accountsList && state.accountsList.length > 0) ? state.accountsList : null
   };
 
   logOutput.textContent += `[INFO] Generating cryptographic keypairs for contest '${params.title}'...\n`;
@@ -448,15 +505,31 @@ generateBtn.addEventListener('click', async () => {
         logOutput.textContent += `[INFO] Private decryption key quarantined in offline judge directory.\n`;
         logOutput.textContent += `[READY] All packages, Participant Client files, and verification instructions emitted!\n`;
 
+        if (res.accounts && res.accounts.length > 0) {
+          state.accountsList = res.accounts;
+          state.csvContent = res.csv_content || '';
+          state.htmlContent = res.html_content || '';
+          state.pdfBase64 = res.pdf_base64 || '';
+          accountsPreviewArea.style.display = 'block';
+          regenerateAccountsBtn.style.display = 'inline-flex';
+          copyAllCredsBtn.style.display = 'inline-flex';
+          downloadCsvBtn.style.display = 'inline-flex';
+          downloadPdfBtn.style.display = 'inline-flex';
+          previewAccountsBtn.style.display = 'none';
+          accountsStatusBadge.textContent = `${res.accounts.length} Accounts Synchronized (Argon2id Salted Hashes)`;
+          renderAccountsTable();
+        }
+
         generationSuccessMessage.innerHTML = `Participant Client package is ready at: <br><strong style="word-break: break-all;">${res.client_dir}</strong><br>Distribute this folder to participants via USB or local network.`;
         generationSuccessCard.style.display = 'block';
+        showToast('Contest package generated successfully!', 'success');
       } else {
         logOutput.textContent += `[ERROR] Build pipeline failed: ${res.error}\n`;
-        alert('Generation failed: ' + res.error);
+        showToast('Generation failed: ' + res.error, 'error');
       }
     } catch (err) {
       logOutput.textContent += `[ERROR] Native IPC error: ${err}\n`;
-      alert('Native IPC error: ' + err);
+      showToast('Native IPC error: ' + err, 'error');
     }
   } else {
     logOutput.textContent += `[INFO] Running in browser preview mode\n`;

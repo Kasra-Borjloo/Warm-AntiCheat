@@ -10,6 +10,35 @@ const state = {
   contestId: ''
 };
 
+function showToast(message, type = 'info', duration = 3500) {
+  let toastContainer = document.getElementById('toastContainer');
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'toastContainer';
+    toastContainer.style.cssText = 'position:fixed; bottom:20px; right:20px; z-index:99999; display:flex; flex-direction:column; gap:8px; pointer-events:none;';
+    document.body.appendChild(toastContainer);
+  }
+  const toast = document.createElement('div');
+  const bg = type === 'error' ? '#ef4444' : (type === 'success' ? '#22c55e' : (type === 'warning' ? '#f59e0b' : '#0284c7'));
+  toast.style.cssText = `background:${bg}; color:#ffffff; padding:10px 16px; border-radius:6px; font-size:0.875rem; font-weight:500; box-shadow:0 4px 12px rgba(0,0,0,0.3); pointer-events:auto; transition:opacity 0.25s ease; max-width:400px; word-break:break-word;`;
+  toast.textContent = message;
+  toastContainer.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
+function switchToTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tabId);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => {
+    c.classList.toggle('active', c.id === tabId);
+  });
+  if (window.replaceLucideIcons) window.replaceLucideIcons();
+}
+
 const windowTitle = document.getElementById('windowTitle');
 const startSessionBtn = document.getElementById('startSessionBtn');
 const concludeSessionBtn = document.getElementById('concludeSessionBtn');
@@ -78,18 +107,7 @@ const toolchainBadge = document.getElementById('toolchainBadge');
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-
-    btn.classList.add('active');
-    const tabId = btn.dataset.tab;
-    const tabContent = document.getElementById(tabId);
-    if (tabContent) {
-      tabContent.classList.add('active');
-    }
-    if (window.replaceLucideIcons) {
-      window.replaceLucideIcons();
-    }
+    switchToTab(btn.dataset.tab);
   });
 });
 
@@ -147,6 +165,7 @@ submitLoginBtn.addEventListener('click', async () => {
         loginCard.style.display = 'none';
         enrollmentCard.style.display = 'block';
         document.getElementById('participantId').value = res.username;
+        showToast('Login successful. Session starting...', 'success');
         startSession();
       }
     } catch (err) {
@@ -198,7 +217,8 @@ concludeSessionBtn.addEventListener('click', async () => {
     }
   }
 
-  alert('Session concluded. Navigate to Export Evidence tab to export your audit log.');
+  showToast('Session concluded. Navigate to Export Evidence tab to export your audit log.', 'success', 5000);
+  switchToTab('exportTab');
 });
 
 const browseExportDirBtn = document.getElementById('browseExportDirBtn');
@@ -244,12 +264,15 @@ exportBtn.addEventListener('click', async () => {
         exportResult.style.display = 'block';
         if (res.success) {
           exportResultText.textContent = `${res.message} Archive: ${res.export_path} (SHA-256: ${res.checksum})`;
+          showToast('Evidence archive exported successfully', 'success');
         } else {
           exportResultText.textContent = res.message;
+          showToast(res.message, 'error');
         }
       } catch (err) {
         exportResult.style.display = 'block';
         exportResultText.textContent = `Export error: ${err}`;
+        showToast('Export error: ' + err, 'error');
       }
     } else {
       exportResult.style.display = 'block';
@@ -283,8 +306,10 @@ modalConfirmExportBtn.addEventListener('click', async () => {
       exportResult.style.display = 'block';
       if (res.success) {
         exportResultText.textContent = `${res.message} Archive: ${res.export_path} (SHA-256: ${res.checksum})`;
+        showToast('Evidence archive exported successfully', 'success');
       } else {
         exportResultText.textContent = res.message;
+        showToast(res.message, 'error');
       }
     } catch (err) {
       modalLogNameError.textContent = typeof err === 'string' ? err : 'Invalid name';

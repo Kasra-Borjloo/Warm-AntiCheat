@@ -20,7 +20,7 @@ use warm_crypto::{
     X25519PublicKey,
 };
 use warm_events::{AuthAction, AuthEventPayload, CompilerEventPayload, EventCategory};
-use warm_platform::{LifecycleTracker, NetworkCollector, ProcessCollector};
+use warm_platform::{LifecycleTracker, NetworkCollector, ProcessCollector, WindowObserver};
 use warm_policies::MonitoringPolicy;
 use warm_storage::{export_evidence_package, HashChainTracker, SqliteAuditStore};
 
@@ -425,6 +425,7 @@ fn start_collector_loop(session: Arc<ActiveSession>, policy: MonitoringPolicy) {
     thread::spawn(move || {
         let mut proc_collector = ProcessCollector::new(policy.app_policy.clone());
         let mut net_collector = NetworkCollector::new();
+        let mut window_observer = WindowObserver::new(policy.browser_policy.clone());
         let mut lifecycle = LifecycleTracker::new(
             policy.heartbeat_interval_secs,
             policy.max_interruption_gap_secs,
@@ -439,6 +440,7 @@ fn start_collector_loop(session: Arc<ActiveSession>, policy: MonitoringPolicy) {
             let procs = proc_collector.poll_events();
             for (_action, mut proc_payload, is_prohibited) in procs {
                 let is_suspicious = is_prohibited
+                    || !proc_payload.listening_ports.is_empty()
                     || proc_payload
                         .cmdline
                         .as_deref()
@@ -475,6 +477,41 @@ fn start_collector_loop(session: Arc<ActiveSession>, policy: MonitoringPolicy) {
 
                 if let Ok(json) = serde_json::to_vec(&proc_payload) {
                     let _ = session.record_event(EventCategory::Process, &json);
+                }
+            }
+
+            let browser_events = window_observer.poll_events();
+            for mut b_event in browser_events {
+                if b_event.is_restricted {
+                    if let Some(bmp_bytes) = warm_platform::capture_screenshot() {
+                        let att_id = Uuid::new_v4();
+                        let filename =
+                            format!("{}_{}.bmp", att_id, Utc::now().format("%Y%m%d_%H%M%S"));
+                        let sha = warm_crypto::sha256_digest(&bmp_bytes);
+                        let size = bmp_bytes.len() as u64;
+
+                        let screenshots_dir = PathBuf::from("./session_data/screenshots");
+                        if fs::create_dir_all(&screenshots_dir).is_ok() {
+                            let _ = fs::write(screenshots_dir.join(&filename), &bmp_bytes);
+                            b_event.screenshot_attachment =
+                                Some(warm_events::EvidenceAttachmentRef {
+                                    attachment_id: att_id,
+                                    filename,
+                                    mime_type: "image/bmp".to_string(),
+                                    sha256_hash: sha,
+                                    size_bytes: size,
+                                    captured_at: Utc::now(),
+                                    reason: format!(
+                                        "Restricted browser activity: {}",
+                                        b_event.domain
+                                    ),
+                                });
+                        }
+                    }
+                }
+
+                if let Ok(json) = serde_json::to_vec(&b_event) {
+                    let _ = session.record_event(EventCategory::Browser, &json);
                 }
             }
 
@@ -1038,6 +1075,7 @@ fn compile_and_run_cpp(
     stdin_input: Option<String>,
 ) -> Result<CompilerRunResponse, String> {
     let tc = BundledToolchain::locate(None).map_err(|e| e.to_string())?;
+    let std_flag = format!("-std={}", tc.cxx_standard);
     let engine = CompilerEngine::new(tc);
 
     let comp_start_utc = Utc::now();
@@ -1046,7 +1084,7 @@ fn compile_and_run_cpp(
         source_code: Some(source_code.clone()),
         output_dir: None,
         optimization_level: Some("-O2".to_string()),
-        standard: Some("-std=c++23".to_string()),
+        standard: Some(std_flag.clone()),
         extra_args: vec!["-pipe".to_string()],
     };
 
@@ -1107,11 +1145,7 @@ fn compile_and_run_cpp(
         source_snapshot: source_code,
         compiler_version: engine.toolchain().version.clone(),
         toolchain_hash: engine.toolchain().sha256_hash.clone(),
-        compilation_args: vec![
-            "-std=c++23".to_string(),
-            "-O2".to_string(),
-            "-pipe".to_string(),
-        ],
+        compilation_args: vec![std_flag, "-O2".to_string(), "-pipe".to_string()],
         compilation_start: comp_start_utc,
         compilation_end: comp_end_utc,
         compiler_exit_code: if comp_res.success { Some(0) } else { Some(1) },

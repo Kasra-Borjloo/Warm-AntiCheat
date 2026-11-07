@@ -41,6 +41,7 @@ fn test_end_to_end_full_contest_lifecycle() {
         enable_cpp_compiler: false,
         participation_mode: warm_core::ParticipationMode::NoAccounts,
         account_count: 0,
+        pregenerated_records: None,
     };
 
     let bundle = generate_contest_distribution(&build_config)
@@ -243,6 +244,7 @@ fn test_end_to_end_compiler_audit_and_judge_verification() {
         enable_cpp_compiler: true,
         participation_mode: warm_core::ParticipationMode::NoAccounts,
         account_count: 0,
+        pregenerated_records: None,
     };
 
     let bundle = generate_contest_distribution(&build_config).expect("Generate contest bundle");
@@ -403,6 +405,7 @@ fn test_end_to_end_account_modes_and_duplicate_detection() {
         enable_cpp_compiler: false,
         participation_mode: warm_core::ParticipationMode::GeneratedAccounts,
         account_count: 5,
+        pregenerated_records: None,
     };
 
     let bundle = generate_contest_distribution(&build_config).expect("Generate contest bundle");
@@ -550,6 +553,7 @@ fn test_end_to_end_usb_export_and_mode_a_b_verification() {
         enable_cpp_compiler: false,
         participation_mode: warm_core::ParticipationMode::GeneratedAccounts,
         account_count: 3,
+        pregenerated_records: None,
     };
 
     let bundle = generate_contest_distribution(&build_config).unwrap();
@@ -692,6 +696,7 @@ fn test_end_to_end_crash_recovery_and_warmac_container() {
         enable_cpp_compiler: true,
         participation_mode: warm_core::ParticipationMode::NoAccounts,
         account_count: 0,
+        pregenerated_records: None,
     };
 
     let bundle = generate_contest_distribution(&build_config).unwrap();

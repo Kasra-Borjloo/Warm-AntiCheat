@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 warm_core.workspace = true
 warm_crypto.workspace = true
+warm_events.workspace = true
 warm_storage.workspace = true
 warm_policies.workspace = true
 warm_verifier.workspace = true

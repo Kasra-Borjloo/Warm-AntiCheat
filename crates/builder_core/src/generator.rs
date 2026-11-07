@@ -30,6 +30,8 @@ pub struct ContestBuildConfig {
     pub participation_mode: warm_core::ParticipationMode,
     #[serde(default)]
     pub account_count: usize,
+    #[serde(default)]
+    pub pregenerated_records: Option<Vec<warm_core::AccountRecord>>,
 }
 
 #[derive(Debug, Clone)]
@@ -41,6 +43,10 @@ pub struct ContestDistBundle {
     pub manifest_signing_key_priv_path: PathBuf,
     pub checksums_path: PathBuf,
     pub participant_client_path: Option<PathBuf>,
+    pub generated_records: Vec<warm_core::AccountRecord>,
+    pub credentials_csv: Option<String>,
+    pub credentials_html: Option<String>,
+    pub credentials_pdf: Option<Vec<u8>>,
 }
 
 const WEBVIEW2_LOADER_X64: &[u8] = include_bytes!("../../../assets/windows/x64/WebView2Loader.dll");
@@ -208,12 +214,34 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
         );
     }
 
-    let (account_config, judge_csv, judge_html, judge_pdf) = if config.participation_mode
+    let (account_config, judge_csv, judge_html, judge_pdf, generated_records) = if config
+        .participation_mode
         == warm_core::ParticipationMode::GeneratedAccounts
         && config.account_count > 0
     {
-        let (records, verifiers) =
-            crate::accounts::generate_participant_accounts(&contest.id, config.account_count)?;
+        let (records, verifiers) = if let Some(ref pre_records) = config.pregenerated_records {
+            if !pre_records.is_empty() {
+                let mut v_list = Vec::with_capacity(pre_records.len());
+                let mut rec_list = Vec::with_capacity(pre_records.len());
+                for r in pre_records {
+                    let mut rec = r.clone();
+                    rec.contest_id = contest.id.clone();
+                    let h = warm_crypto::hash_password(&rec.plaintext_password)
+                        .map_err(|e| WarmError::Crypto(format!("Failed to hash password: {e}")))?;
+                    v_list.push(warm_core::AccountVerifier {
+                        account_id: rec.account_id,
+                        username: rec.username.clone(),
+                        password_hash: h,
+                    });
+                    rec_list.push(rec);
+                }
+                (rec_list, v_list)
+            } else {
+                crate::accounts::generate_participant_accounts(&contest.id, config.account_count)?
+            }
+        } else {
+            crate::accounts::generate_participant_accounts(&contest.id, config.account_count)?
+        };
         let csv = crate::accounts::export_credentials_csv(&contest.title, &contest.id, &records);
         let html = crate::accounts::export_credentials_printable_html(
             &contest.title,
@@ -224,24 +252,31 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
         (
             warm_core::AccountModeConfig {
                 mode: warm_core::ParticipationMode::GeneratedAccounts,
-                account_count: config.account_count,
+                account_count: records.len(),
                 verifiers,
             },
             Some(csv),
             Some(html),
             Some(pdf),
+            records,
         )
     } else {
-        (warm_core::AccountModeConfig::default(), None, None, None)
+        (
+            warm_core::AccountModeConfig::default(),
+            None,
+            None,
+            None,
+            Vec::new(),
+        )
     };
 
-    if let Some(csv) = judge_csv {
+    if let Some(ref csv) = judge_csv {
         let _ = fs::write(judge_dir.join("credentials.csv"), csv);
     }
-    if let Some(html) = judge_html {
+    if let Some(ref html) = judge_html {
         let _ = fs::write(judge_dir.join("credentials.html"), html);
     }
-    if let Some(pdf) = judge_pdf {
+    if let Some(ref pdf) = judge_pdf {
         let _ = fs::write(judge_dir.join("credentials.pdf"), pdf);
     }
 
@@ -517,6 +552,10 @@ warm_judge_app verify-manifest \
         manifest_signing_key_priv_path: signing_priv_path,
         checksums_path,
         participant_client_path: copied_participant_client,
+        generated_records,
+        credentials_csv: judge_csv,
+        credentials_html: judge_html,
+        credentials_pdf: judge_pdf,
     })
 }
 
@@ -543,6 +582,7 @@ mod tests {
             enable_cpp_compiler: false,
             participation_mode: warm_core::ParticipationMode::NoAccounts,
             account_count: 0,
+            pregenerated_records: None,
         };
 
         let bundle = generate_contest_distribution(&config).expect("Generation should succeed");
@@ -610,6 +650,7 @@ mod tests {
             enable_cpp_compiler: false,
             participation_mode: warm_core::ParticipationMode::GeneratedAccounts,
             account_count: 5,
+            pregenerated_records: None,
         };
 
         let bundle = generate_contest_distribution(&config).expect("Generation should succeed");

@@ -15,7 +15,7 @@
           <span class="icon" data-lucide="scale" data-size="26"></span>
           <h2>Judge Verifier</h2>
         </div>
-        <span class="version-label">Warm-AntiCheat Jury Portal v0.5.0</span>
+        <span class="version-label">Warm-AntiCheat Jury Portal v0.6.0</span>
       </div>
 
       <div class="key-status-box">
@@ -44,13 +44,23 @@
     <main class="judge-main">
       <header class="main-header">
         <div>
-          <span class="contest-subtitle">ACTIVE CONTEST: GOCUP 1</span>
-          <h1 id="selectedParticipantTitle">Select a participant to review</h1>
+          <span class="contest-subtitle">FORENSIC VERIFICATION PORTAL</span>
+          <h1 id="selectedParticipantTitle">No Evidence Archive Loaded</h1>
         </div>
         <div class="verdict-banner" id="verdictBanner" style="display: none;">
           <span class="verdict-pill" id="verdictPill">SAFE</span>
         </div>
       </header>
+
+      <div id="emptyStateCard" style="padding: 4rem 2rem; text-align: center; border: 1px dashed var(--border-color); border-radius: 8px; margin-top: 1.5rem; background: var(--card-bg);">
+        <span data-lucide="file-search" data-size="48" style="color: #64748b; margin-bottom: 1rem; display: block; margin: 0 auto 1rem;"></span>
+        <h3 style="margin-bottom: 0.5rem; font-size: 1.25rem;">No Evidence Archive Loaded</h3>
+        <p style="color: var(--text-muted); max-width: 480px; margin: 0 auto 1.5rem; line-height: 1.5;">Click the button below or in the left sidebar to load and decrypt an official participant archive (.warmac) or SQLite evidence database.</p>
+        <button class="btn btn-primary" id="mainImportBtn">
+          <span data-lucide="upload" data-size="16"></span>
+          <span>Load Evidence (.warmac / .sqlite)</span>
+        </button>
+      </div>
 
       <div id="inspectorContent" style="display: none;">
         <div class="card mt-2" id="accountMetadataCard" style="display: none; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); margin-bottom: 1rem;">
@@ -74,7 +84,7 @@
           </div>
           <div class="stat-card">
             <span class="label">Total Events</span>
-            <span class="value" id="statTotalEvents">142</span>
+            <span class="value" id="statTotalEvents">0</span>
           </div>
           <div class="stat-card">
             <span class="label">Critical Findings</span>
@@ -99,7 +109,7 @@
             <span data-lucide="camera" data-size="20"></span>
             <h3>Event-Triggered Evidence Screenshots</h3>
           </div>
-          <p class="description">Authorized screen captures triggered during suspicious process execution or security events.</p>
+          <p class="description">Authorized screen captures triggered during suspicious process execution, restricted domain navigation, or security events.</p>
           <div id="screenshotsGallery" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; margin-top: 1rem;"></div>
         </div>
 
@@ -159,7 +169,7 @@
             </button>
           </div>
           <p class="description">Review exact source snapshots, compiler diagnostics, and execution events cryptographically recorded in the hash chain.</p>
-          <div id="compilerActivityContent" style="background: #020617; padding: 1rem; border-radius: 6px; border: 1px solid #1e293b; font-family: monospace; font-size: 0.9rem; max-height: 250px; overflow-y: auto; color: #cbd5e1;">
+          <div id="compilerActivityContent" style="background: #020617; padding: 1rem; border-radius: 6px; border: 1px solid #1e293b; font-family: monospace; font-size: 0.9rem; max-height: 350px; overflow-y: auto; color: #cbd5e1;">
             No built-in compiler attempts recorded for this participant. (Absence does not imply external compiler use).
           </div>
         </div>

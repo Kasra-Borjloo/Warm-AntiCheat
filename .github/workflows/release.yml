@@ -125,7 +125,7 @@ jobs:
               return { sha256: parts[0], path: parts[1] };
             });
             const manifest = {
-              release: process.env.GITHUB_REF_NAME || "v0.5.0",
+              release: process.env.GITHUB_REF_NAME || "v0.6.0",
               project: "Warm-AntiCheat",
               timestamp: new Date().toISOString(),
               artifacts,
@@ -149,7 +149,7 @@ jobs:
             fs.writeFileSync("release-manifest.json", JSON.stringify(manifest, null, 2));
           '
 
-          echo '{"spdxVersion":"SPDX-2.3","name":"Warm-AntiCheat","packages":[{"name":"warm-anticheat","versionInfo":"0.5.0","licenseConcluded":"GPL-3.0-only"}]}' > sbom.spdx.json
+          echo '{"spdxVersion":"SPDX-2.3","name":"Warm-AntiCheat","packages":[{"name":"warm-anticheat","versionInfo":"0.6.0","licenseConcluded":"GPL-3.0-only"}]}' > sbom.spdx.json
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

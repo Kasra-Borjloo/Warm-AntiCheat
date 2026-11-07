@@ -23,6 +23,8 @@ pub struct BuildContestParams {
     pub participation_mode: Option<String>,
     #[serde(default)]
     pub account_count: Option<usize>,
+    #[serde(default)]
+    pub pregenerated_records: Option<Vec<AccountItemView>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +56,14 @@ pub struct BuildContestResponse {
     pub checksums_path: String,
     pub judge_private_key_path: String,
     pub client_dir: String,
+    #[serde(default)]
+    pub accounts: Vec<AccountItemView>,
+    #[serde(default)]
+    pub csv_content: Option<String>,
+    #[serde(default)]
+    pub html_content: Option<String>,
+    #[serde(default)]
+    pub pdf_base64: Option<String>,
     pub error: Option<String>,
 }
 
@@ -114,6 +124,20 @@ fn generate_contest(params: BuildContestParams) -> BuildContestResponse {
     };
     let account_count = params.account_count.unwrap_or(0);
 
+    let pregenerated = params.pregenerated_records.map(|items| {
+        items
+            .into_iter()
+            .map(|item| warm_core::AccountRecord {
+                account_id: uuid::Uuid::parse_str(&item.account_id)
+                    .unwrap_or_else(|_| uuid::Uuid::new_v4()),
+                username: item.username,
+                plaintext_password: item.password,
+                contest_id: item.contest_id,
+                created_at: chrono::Utc::now(),
+            })
+            .collect()
+    });
+
     let config = ContestBuildConfig {
         title: params.title,
         organizer: params.organizer,
@@ -128,11 +152,30 @@ fn generate_contest(params: BuildContestParams) -> BuildContestResponse {
         enable_cpp_compiler: params.enable_cpp_compiler,
         participation_mode,
         account_count,
+        pregenerated_records: pregenerated,
     };
 
     match generate_contest_distribution(&config) {
         Ok(bundle) => {
             let client_dir = bundle.root_dir.join("client").to_string_lossy().to_string();
+            let accounts_view: Vec<AccountItemView> = bundle
+                .generated_records
+                .iter()
+                .enumerate()
+                .map(|(i, r)| AccountItemView {
+                    index: i + 1,
+                    username: r.username.clone(),
+                    password: r.plaintext_password.clone(),
+                    account_id: r.account_id.to_string(),
+                    contest_id: r.contest_id.clone(),
+                })
+                .collect();
+
+            let pdf_b64 = bundle
+                .credentials_pdf
+                .as_ref()
+                .map(|b| base64::engine::general_purpose::STANDARD.encode(b));
+
             BuildContestResponse {
                 success: true,
                 contest_id: bundle.contest_id,
@@ -145,6 +188,10 @@ fn generate_contest(params: BuildContestParams) -> BuildContestResponse {
                 checksums_path: bundle.checksums_path.to_string_lossy().to_string(),
                 judge_private_key_path: bundle.judge_private_key_path.to_string_lossy().to_string(),
                 client_dir,
+                accounts: accounts_view,
+                csv_content: bundle.credentials_csv,
+                html_content: bundle.credentials_html,
+                pdf_base64: pdf_b64,
                 error: None,
             }
         }
@@ -156,6 +203,10 @@ fn generate_contest(params: BuildContestParams) -> BuildContestResponse {
             checksums_path: String::new(),
             judge_private_key_path: String::new(),
             client_dir: String::new(),
+            accounts: Vec::new(),
+            csv_content: None,
+            html_content: None,
+            pdf_base64: None,
             error: Some(e.to_string()),
         },
     }
@@ -260,6 +311,7 @@ fn run_cli(args: &[String]) {
         enable_cpp_compiler: args.iter().any(|a| a == "--enable-cpp-compiler"),
         participation_mode: warm_core::ParticipationMode::NoAccounts,
         account_count: 0,
+        pregenerated_records: None,
     };
 
     match generate_contest_distribution(&config) {

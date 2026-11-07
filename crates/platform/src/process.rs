@@ -1,4 +1,6 @@
 use std::collections::{HashMap, HashSet};
+use std::net::{SocketAddr, TcpStream};
+use std::time::Duration;
 use sysinfo::{ProcessesToUpdate, System};
 use warm_events::{ProcessAction, ProcessEventPayload};
 use warm_policies::AppPolicy;
@@ -17,6 +19,8 @@ pub struct ProcessCollector {
     policy: AppPolicy,
     known_pids: HashMap<u32, ObservedProcess>,
     simulated_processes: HashSet<String>,
+    pending_initial_events: Vec<(ProcessAction, ProcessEventPayload, bool)>,
+    reported_ports: HashSet<u16>,
 }
 
 impl ProcessCollector {
@@ -25,6 +29,8 @@ impl ProcessCollector {
         system.refresh_processes(ProcessesToUpdate::All, true);
 
         let mut known_pids = HashMap::new();
+        let mut pending_initial_events = Vec::new();
+
         for (pid, proc) in system.processes() {
             let pid_u32 = pid.as_u32();
             let name = proc.name().to_string_lossy().to_string();
@@ -36,7 +42,28 @@ impl ProcessCollector {
                     .collect::<Vec<_>>()
                     .join(" "),
             );
-            let is_prohibited = policy.is_prohibited(&name);
+
+            let is_prohibited = policy.is_prohibited(&name)
+                || cmdline
+                    .as_deref()
+                    .and_then(AppPolicy::inspect_command_line)
+                    .is_some();
+
+            if is_prohibited {
+                pending_initial_events.push((
+                    ProcessAction::Started,
+                    ProcessEventPayload {
+                        pid: pid_u32,
+                        name: name.clone(),
+                        path: path.clone(),
+                        cmdline: cmdline.clone(),
+                        action: ProcessAction::Started,
+                        screenshot_attachment: None,
+                        listening_ports: Vec::new(),
+                    },
+                    true,
+                ));
+            }
 
             known_pids.insert(
                 pid_u32,
@@ -50,17 +77,43 @@ impl ProcessCollector {
             );
         }
 
+        let mut reported_ports = HashSet::new();
+        let active_ports = Self::scan_active_ai_ports();
+        for (port, desc) in active_ports {
+            reported_ports.insert(port);
+            pending_initial_events.push((
+                ProcessAction::Started,
+                ProcessEventPayload {
+                    pid: 0,
+                    name: format!("Local AI Server: {desc}"),
+                    path: None,
+                    cmdline: Some(format!("127.0.0.1:{port}")),
+                    action: ProcessAction::Started,
+                    screenshot_attachment: None,
+                    listening_ports: vec![port],
+                },
+                true,
+            ));
+        }
+
         Self {
             system,
             policy,
             known_pids,
             simulated_processes: HashSet::new(),
+            pending_initial_events,
+            reported_ports,
         }
     }
 
     pub fn poll_events(&mut self) -> Vec<(ProcessAction, ProcessEventPayload, bool)> {
-        self.system.refresh_processes(ProcessesToUpdate::All, true);
         let mut events = Vec::new();
+
+        if !self.pending_initial_events.is_empty() {
+            events.append(&mut self.pending_initial_events);
+        }
+
+        self.system.refresh_processes(ProcessesToUpdate::All, true);
 
         let current_pids: HashMap<u32, (String, Option<String>, Option<String>)> = self
             .system
@@ -86,7 +139,12 @@ impl ProcessCollector {
 
         for (&pid, (name, path, cmdline)) in &current_pids {
             if !self.known_pids.contains_key(&pid) {
-                let is_prohibited = self.policy.is_prohibited(name);
+                let is_prohibited = self.policy.is_prohibited(name)
+                    || cmdline
+                        .as_deref()
+                        .and_then(AppPolicy::inspect_command_line)
+                        .is_some();
+
                 let payload = ProcessEventPayload {
                     pid,
                     name: name.clone(),
@@ -134,7 +192,48 @@ impl ProcessCollector {
             }
         }
 
+        let current_ports = Self::scan_active_ai_ports();
+        for (port, desc) in current_ports {
+            if !self.reported_ports.contains(&port) {
+                self.reported_ports.insert(port);
+                events.push((
+                    ProcessAction::Started,
+                    ProcessEventPayload {
+                        pid: 0,
+                        name: format!("Local AI Server: {desc}"),
+                        path: None,
+                        cmdline: Some(format!("127.0.0.1:{port}")),
+                        action: ProcessAction::Started,
+                        screenshot_attachment: None,
+                        listening_ports: vec![port],
+                    },
+                    true,
+                ));
+            }
+        }
+
         events
+    }
+
+    pub fn scan_active_ai_ports() -> Vec<(u16, &'static str)> {
+        let targets = [
+            (11434, "Ollama Local AI Inference Runtime"),
+            (1234, "LM Studio Local LLM Server"),
+            (8080, "llama.cpp / Local LLM Server"),
+            (7860, "Local AI WebUI / Gradio Server"),
+            (5000, "Text-Generation-WebUI API Server"),
+            (8000, "vLLM / High-Throughput Inference Server"),
+            (8888, "Jupyter Notebook Server"),
+        ];
+
+        let mut active = Vec::new();
+        for (port, desc) in targets {
+            let addr = SocketAddr::from(([127, 0, 0, 1], port));
+            if TcpStream::connect_timeout(&addr, Duration::from_millis(30)).is_ok() {
+                active.push((port, desc));
+            }
+        }
+        active
     }
 
     pub fn simulate_process_launch(
@@ -143,16 +242,16 @@ impl ProcessCollector {
         pid: u32,
     ) -> (ProcessAction, ProcessEventPayload, bool) {
         let is_prohibited = self.policy.is_prohibited(name);
+        self.simulated_processes.insert(name.to_string());
         let payload = ProcessEventPayload {
             pid,
             name: name.to_string(),
-            path: Some(format!("/usr/bin/{name}")),
-            cmdline: Some(format!("{name} --server")),
+            path: Some(format!("/simulated/{name}")),
+            cmdline: Some(name.to_string()),
             action: ProcessAction::Started,
             screenshot_attachment: None,
             listening_ports: Vec::new(),
         };
-        self.simulated_processes.insert(name.to_string());
         (ProcessAction::Started, payload, is_prohibited)
     }
 
@@ -170,19 +269,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_process_collector_simulation() {
+    fn test_process_collector_lifecycle() {
         let policy = AppPolicy::default();
         let mut collector = ProcessCollector::new(policy);
 
         let (action, payload, prohibited) = collector.simulate_process_launch("rustc.exe", 9999);
         assert_eq!(action, ProcessAction::Started);
-        assert_eq!(payload.name, "rustc.exe");
+        assert_eq!(payload.pid, 9999);
         assert!(!prohibited);
 
         let (action_ai, payload_ai, prohibited_ai) =
-            collector.simulate_process_launch("ollama.exe", 10001);
+            collector.simulate_process_launch("ollama.exe", 8888);
         assert_eq!(action_ai, ProcessAction::Started);
-        assert_eq!(payload_ai.name, "ollama.exe");
+        assert_eq!(payload_ai.pid, 8888);
         assert!(prohibited_ai);
     }
 }

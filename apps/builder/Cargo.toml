@@ -10,6 +10,7 @@ warm_core.workspace = true
 warm_crypto.workspace = true
 warm_policies.workspace = true
 warm_builder_core.workspace = true
+uuid.workspace = true
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -17,19 +17,43 @@ pub struct ManifestVerificationResult {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompilerActivityItem {
+    pub sequence_number: u64,
+    pub timestamp: String,
+    pub source_file: String,
+    pub source_sha256: String,
+    pub compiler_version: String,
+    pub compilation_args: Vec<String>,
+    pub diagnostics: String,
+    pub executable_hash: Option<String>,
+    pub exit_code: i32,
+    pub execution_error: Option<String>,
+    pub source_snapshot: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuditReportResponse {
     pub verdict: String,
     pub participant_id: String,
+    pub session_id: String,
     pub total_events: usize,
+    pub hash_chain_verified: bool,
     pub violations: Vec<String>,
+    pub findings: Vec<warm_verifier::ForensicFinding>,
+    pub timeline: Vec<warm_verifier::DecryptedTimelineEvent>,
     pub summary_text: String,
     pub ai_advisory: String,
+    pub verified_facts: Vec<String>,
+    pub contextual_inferences: Vec<String>,
+    pub recommendations: Vec<String>,
     pub authenticated_account_id: Option<String>,
     pub declared_log_name: Option<String>,
     pub participation_mode: String,
     #[serde(default)]
     pub screenshots: Vec<warm_verifier::ScreenshotEvidence>,
+    #[serde(default)]
+    pub compiler_activities: Vec<CompilerActivityItem>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -221,15 +245,42 @@ fn verify_evidence_db(
     let stats = DeterministicAuditEngine::compute_stats(&report);
     let ai = LocalAiSummarizer::summarize(&report);
 
+    let mut compiler_activities = Vec::new();
+    for ev in &report.timeline {
+        if ev.category == "Compiler" {
+            if let Ok(c) =
+                serde_json::from_value::<warm_events::CompilerEventPayload>(ev.payload_json.clone())
+            {
+                compiler_activities.push(CompilerActivityItem {
+                    sequence_number: ev.sequence_number,
+                    timestamp: ev.timestamp_rfc3339.clone(),
+                    source_file: c.source_path,
+                    source_sha256: c.source_sha256,
+                    compiler_version: c.compiler_version,
+                    compilation_args: c.compilation_args,
+                    diagnostics: c.compiler_diagnostics,
+                    executable_hash: c.output_executable_hash,
+                    exit_code: c.program_exit_code.or(c.compiler_exit_code).unwrap_or(0),
+                    execution_error: c.execution_error,
+                    source_snapshot: c.source_snapshot,
+                });
+            }
+        }
+    }
+
     Ok(AuditReportResponse {
         verdict: format!("{}", report.classification),
         participant_id: report.participant_id,
+        session_id: report.session_id.to_string(),
         total_events: report.total_events as usize,
+        hash_chain_verified: report.hash_chain_verified,
         violations: report
             .findings
             .iter()
             .map(|f| f.description.clone())
             .collect(),
+        findings: report.findings,
+        timeline: report.timeline,
         summary_text: format!(
             "Total events: {}. Critical findings: {}. Warning findings: {}. Processing time: {}ms.",
             stats.total_events,
@@ -241,93 +292,98 @@ fn verify_evidence_db(
             "Verdict: {}. Facts: {:?}. Inferences: {:?}",
             ai.verdict, ai.verified_facts, ai.contextual_inferences
         ),
+        verified_facts: ai.verified_facts,
+        contextual_inferences: ai.contextual_inferences,
+        recommendations: ai.recommended_actions,
         authenticated_account_id: report.authenticated_account_id.map(|u| u.to_string()),
         declared_log_name: report.declared_log_name,
         participation_mode: format!("{:?}", report.participation_mode),
         screenshots: report.screenshots,
+        compiler_activities,
     })
 }
 
 fn run_cli(args: &[String]) {
-    if args.len() > 1 && args[1] == "verify-manifest" {
-        let manifest_path = args
-            .get(2)
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("./dist/gocup-1/manifests/contest_manifest.json"));
-        let sig_path = args
-            .get(3)
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("./dist/gocup-1/manifests/contest_manifest.json.sig"));
-        let pk_path = args.get(4).map(PathBuf::from).unwrap_or_else(|| {
-            PathBuf::from("./dist/gocup-1/configuration/manifest_signing_key.pub")
-        });
+    if args.len() > 1 && (args[1] == "verify-manifest" || args[1] == "audit") {
+        if args[1] == "verify-manifest" {
+            let manifest_path = args
+                .get(2)
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("./dist/gocup-1/manifests/contest_manifest.json"));
+            let sig_path = args.get(3).map(PathBuf::from).unwrap_or_else(|| {
+                PathBuf::from("./dist/gocup-1/manifests/contest_manifest.json.sig")
+            });
+            let pk_path = args.get(4).map(PathBuf::from).unwrap_or_else(|| {
+                PathBuf::from("./dist/gocup-1/configuration/manifest_signing_key.pub")
+            });
 
-        println!("[*] Verifying Contest Manifest digital signature...");
-        println!("    Manifest:   {}", manifest_path.display());
-        println!("    Signature:  {}", sig_path.display());
-        println!("    Public Key: {}", pk_path.display());
+            println!("[*] Verifying Contest Manifest digital signature...");
+            println!("    Manifest:   {}", manifest_path.display());
+            println!("    Signature:  {}", sig_path.display());
+            println!("    Public Key: {}", pk_path.display());
 
-        if !manifest_path.exists() || !sig_path.exists() || !pk_path.exists() {
-            eprintln!("[ERROR] One or more manifest/signature/key files not found.");
-            std::process::exit(1);
-        }
-
-        let manifest_bytes = fs::read(&manifest_path).expect("Failed to read manifest file");
-        let sig_hex = fs::read_to_string(&sig_path).expect("Failed to read signature file");
-        let pk_hex = fs::read_to_string(&pk_path).expect("Failed to read public key file");
-
-        match verify_signature_hex(&pk_hex, &manifest_bytes, &sig_hex) {
-            Ok(()) => println!("\n[OK] Manifest digital signature is VALID and authentic!"),
-            Err(e) => {
-                eprintln!("\n[FAILED] Manifest signature verification failed: {e}");
+            if !manifest_path.exists() || !sig_path.exists() || !pk_path.exists() {
+                eprintln!("[ERROR] One or more manifest/signature/key files not found.");
                 std::process::exit(1);
             }
-        }
-    } else if args.len() > 1 && args[1] == "audit" {
-        let db_path = args
-            .get(2)
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("./participant_audit.sqlite"));
 
-        println!("[*] Opening audit evidence storage: {}", db_path.display());
-        let store = match SqliteAuditStore::open(&db_path) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("[ERROR] Failed to open audit database: {e}");
-                std::process::exit(1);
+            let manifest_bytes = fs::read(&manifest_path).expect("Failed to read manifest file");
+            let sig_hex = fs::read_to_string(&sig_path).expect("Failed to read signature file");
+            let pk_hex = fs::read_to_string(&pk_path).expect("Failed to read public key file");
+
+            match verify_signature_hex(&pk_hex, &manifest_bytes, &sig_hex) {
+                Ok(()) => println!("\n[OK] Manifest digital signature is VALID and authentic!"),
+                Err(e) => {
+                    eprintln!("\n[FAILED] Manifest signature verification failed: {e}");
+                    std::process::exit(1);
+                }
             }
-        };
+        } else {
+            let db_path = args
+                .get(2)
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("./participant_audit.sqlite"));
 
-        let dummy_keypair = EvidenceEncryptionKeypair::generate();
-        let policy = MonitoringPolicy::default();
-        let verifier = ForensicVerifier::new(policy, dummy_keypair);
-        let contest_uuid = Uuid::nil();
-        let participant_id = "team-42";
+            println!("[*] Opening audit evidence storage: {}", db_path.display());
+            let store = match SqliteAuditStore::open(&db_path) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("[ERROR] Failed to open audit database: {e}");
+                    std::process::exit(1);
+                }
+            };
 
-        let report = match verifier.audit_store(&store, &contest_uuid, participant_id) {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("[ERROR] Audit verification failed: {e}");
-                std::process::exit(1);
+            let dummy_keypair = EvidenceEncryptionKeypair::generate();
+            let policy = MonitoringPolicy::default();
+            let verifier = ForensicVerifier::new(policy, dummy_keypair);
+            let contest_uuid = Uuid::nil();
+            let participant_id = "team-42";
+
+            let report = match verifier.audit_store(&store, &contest_uuid, participant_id) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("[ERROR] Audit verification failed: {e}");
+                    std::process::exit(1);
+                }
+            };
+
+            let stats = DeterministicAuditEngine::compute_stats(&report);
+            let ai = LocalAiSummarizer::summarize(&report);
+
+            println!("\n[FORENSIC AUDIT REPORT]");
+            println!("    Participant:      {}", report.participant_id);
+            println!("    Classification:   {}", report.classification);
+            println!("    Hash Chain Valid: {}", report.hash_chain_verified);
+            println!("    Total Events:     {}", stats.total_events);
+            println!("    Critical Alerts:  {}", stats.critical_findings_count);
+            println!("\n[AI ADVISORY SUMMARY]");
+            println!("    AI Verdict:       {}", ai.verdict);
+            for fact in &ai.verified_facts {
+                println!("    - FACT: {fact}");
             }
-        };
-
-        let stats = DeterministicAuditEngine::compute_stats(&report);
-        let ai = LocalAiSummarizer::summarize(&report);
-
-        println!("\n[FORENSIC AUDIT REPORT]");
-        println!("    Participant:      {}", report.participant_id);
-        println!("    Classification:   {}", report.classification);
-        println!("    Hash Chain Valid: {}", report.hash_chain_verified);
-        println!("    Total Events:     {}", stats.total_events);
-        println!("    Critical Alerts:  {}", stats.critical_findings_count);
-        println!("\n[AI ADVISORY SUMMARY]");
-        println!("    AI Verdict:       {}", ai.verdict);
-        for fact in &ai.verified_facts {
-            println!("    - FACT: {fact}");
-        }
-        for inf in &ai.contextual_inferences {
-            println!("    - INFERENCE: {inf}");
+            for inf in &ai.contextual_inferences {
+                println!("    - INFERENCE: {inf}");
+            }
         }
     }
 }

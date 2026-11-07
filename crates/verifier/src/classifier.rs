@@ -338,6 +338,20 @@ impl ForensicVerifier {
                         });
                     }
 
+                    if !proc_payload.listening_ports.is_empty() {
+                        classification = VerdictClassification::Unsafe;
+                        findings.push(ForensicFinding {
+                            severity: FindingSeverity::Critical,
+                            title: "Local AI Inference Service Detected".to_string(),
+                            description: format!(
+                                "Active local AI service '{}' detected listening on port(s): {:?}",
+                                proc_payload.name, proc_payload.listening_ports
+                            ),
+                            supporting_sequences: vec![event.sequence_number],
+                            timestamps: vec![event.timestamp_rfc3339.clone()],
+                        });
+                    }
+
                     if let Some(ref cmdline) = proc_payload.cmdline {
                         if let Some((rule_name, detail)) =
                             warm_policies::AppPolicy::inspect_command_line(cmdline)
@@ -362,18 +376,20 @@ impl ForensicVerifier {
                 if let Ok(browser_payload) =
                     serde_json::from_value::<BrowserEventPayload>(payload_value.clone())
                 {
-                    if self
-                        .policy
-                        .browser_policy
-                        .is_restricted(&browser_payload.domain)
+                    if browser_payload.is_restricted
+                        || self
+                            .policy
+                            .browser_policy
+                            .is_restricted(&browser_payload.domain)
                     {
                         classification = VerdictClassification::Unsafe;
                         findings.push(ForensicFinding {
                             severity: FindingSeverity::Critical,
-                            title: "Restricted Domain Navigated".to_string(),
+                            title: "Restricted Domain or AI Assistant Accessed".to_string(),
                             description: format!(
-                                "Restricted domain '{}' accessed during contest.",
-                                browser_payload.domain
+                                "Restricted domain / AI assistant '{}' accessed during contest. Window: {}",
+                                browser_payload.domain,
+                                browser_payload.window_title.as_deref().unwrap_or("Active Browser Window")
                             ),
                             supporting_sequences: vec![event.sequence_number],
                             timestamps: vec![event.timestamp_rfc3339.clone()],
@@ -589,7 +605,7 @@ mod tests {
             cmdline: Some("ollama run llama3".to_string()),
             action: ProcessAction::Started,
             screenshot_attachment: None,
-            listening_ports: vec![11434],
+            listening_ports: vec![],
         };
         let payload_json = serde_json::to_vec(&proc_payload).unwrap();
         let payload_hash = sha256_digest(&payload_json);
@@ -742,7 +758,7 @@ mod tests {
             cmdline: Some("python -m llama_cpp.server --model mistral.gguf".to_string()),
             action: ProcessAction::Started,
             screenshot_attachment: None,
-            listening_ports: vec![8000],
+            listening_ports: vec![],
         };
         let ai_json = serde_json::to_vec(&ai_proc).unwrap();
         let ai_hash = sha256_digest(&ai_json);

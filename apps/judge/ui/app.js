@@ -1,98 +1,13 @@
-const participantsData = {
-  'team-42': {
-    name: 'Team 42 (Alice & Bob)',
-    verdict: 'SAFE',
-    hashChain: 'VERIFIED (SHA-256)',
-    totalEvents: 142,
-    criticalFindings: 0,
-    gaps: 0,
-    participationMode: 'GeneratedAccounts',
-    authenticatedAccountId: 'e01a88b1-36aa-4251-bb38-662589254301',
-    declaredLogName: null,
-    findings: [],
-    aiSummary: {
-      facts: [
-        'Total audit events verified in SHA-256 hash chain: 142',
-        'Hash chain cryptographic integrity status: INTACT (No tampering detected)',
-        'Continuous monitoring heartbeats recorded every 15s throughout the 4-hour window'
-      ],
-      inferences: [
-        'Participant strictly adhered to contest boundaries. No unauthorized AI tool execution or restricted domain visits observed.'
-      ],
-      recommendations: [
-        'Approve submission without further inquiry.'
-      ]
-    },
-    timeline: [
-      { seq: 1, time: '2026-11-07T09:00:00Z', cat: 'Auth', details: 'Participant Login: Username GOCUP-001 (Argon2id offline verification success)', hash: 'a101...99f' },
-      { seq: 2, time: '2026-11-07T09:00:05Z', cat: 'SystemLifecycle', details: 'ApplicationLaunch: Warm-AntiCheat v0.5.0 on Windows', hash: 'e291...3a1' },
-      { seq: 3, time: '2026-11-07T09:00:10Z', cat: 'Network', details: 'Connected to WiFi: "Sharif-Guest" (Interface: wlan0)', hash: 'a149...8c2' },
-      { seq: 4, time: '2026-11-07T09:00:15Z', cat: 'SystemLifecycle', details: 'Heartbeat tick #1 (All monitors operational)', hash: '9b04...5f7' },
-      { seq: 5, time: '2026-11-07T09:00:20Z', cat: 'Process', details: 'Process started: code.exe (PID: 4120)', hash: '4cb1...210' },
-      { seq: 6, time: '2026-11-07T09:15:20Z', cat: 'Compiler', details: 'Built-in C++23 Compilation: solution.cpp (Success, Exit: 0)', hash: 'c901...4d8' }
-    ],
-    compilerActivity: [
-      {
-        timestamp: '2026-11-07T09:15:20Z',
-        sourceFile: 'solution.cpp',
-        sourceSha256: '8e82110c4d2d48348bb95b05615d6c8b9db77b3b429d20c5c366ff1239847e12',
-        compilerVersion: 'GNU G++ 14.2.0 (C++23)',
-        compilationArgs: ['-std=c++23', '-O2', '-pipe', 'solution.cpp', '-o', 'bin.exe'],
-        diagnostics: 'Compilation successful. 0 warnings.',
-        executableHash: 'a41d998124e5a201c8012bbfa32c0281b9201948291048291048291048291048',
-        exitCode: 0,
-        stdout: 'Warm-AntiCheat C++23 Solution Ready!\n',
-        sourceSnapshot: '#include <bits/stdc++.h>\n\nint main() {\n    std::cout << "Warm-AntiCheat C++23 Solution Ready!" << std::endl;\n    return 0;\n}'
-      }
-    ]
-  },
-  'team-13': {
-    name: 'Team 13 (Charlie)',
-    verdict: 'UNSAFE',
-    hashChain: 'VERIFIED (SHA-256)',
-    totalEvents: 88,
-    criticalFindings: 1,
-    gaps: 0,
-    participationMode: 'NoAccounts',
-    authenticatedAccountId: null,
-    declaredLogName: 'Charlie_USB_1',
-    findings: [
-      {
-        severity: 'critical',
-        title: 'Prohibited AI Application Executed',
-        desc: 'Prohibited application "ollama.exe" (PID: 8840) was launched during active competition session.',
-        seqs: [44],
-        time: '2026-11-07T10:15:32Z'
-      }
-    ],
-    aiSummary: {
-      facts: [
-        'Total audit events verified in SHA-256 hash chain: 88',
-        'Verified critical violation: Execution of prohibited Ollama local model inference runtime (PID: 8840) at 10:15:32 UTC',
-        'Self-declared log export handle: "Charlie_USB_1"'
-      ],
-      inferences: [
-        'Participant accessed prohibited AI generative models while attempting Algorithmic Problem B.'
-      ],
-      recommendations: [
-        'Disqualification recommended under Competition Rule §4.1.'
-      ]
-    },
-    timeline: [
-      { seq: 1, time: '2026-11-07T09:05:00Z', cat: 'SystemLifecycle', details: 'ApplicationLaunch: Warm-AntiCheat v0.5.0 on Linux', hash: '7c82...01e' },
-      { seq: 44, time: '2026-11-07T10:15:32Z', cat: 'Process', details: 'CRITICAL: Prohibited application executed: ollama.exe (PID: 8840)', hash: 'f91b...bb7' }
-    ],
-    compilerActivity: []
-  }
-};
+const participantsData = {};
 
-let currentParticipantKey = 'team-42';
+let currentParticipantKey = null;
 let currentFilter = 'all';
 
 const participantsList = document.getElementById('participantsList');
 const selectedParticipantTitle = document.getElementById('selectedParticipantTitle');
 const verdictBanner = document.getElementById('verdictBanner');
 const verdictPill = document.getElementById('verdictPill');
+const emptyStateCard = document.getElementById('emptyStateCard');
 const inspectorContent = document.getElementById('inspectorContent');
 const statHashChain = document.getElementById('statHashChain');
 const statTotalEvents = document.getElementById('statTotalEvents');
@@ -105,137 +20,270 @@ const timelineTbody = document.getElementById('timelineTbody');
 const themeToggle = document.getElementById('themeToggle');
 const saveDecisionBtn = document.getElementById('saveDecisionBtn');
 const compilerActivityContent = document.getElementById('compilerActivityContent');
-
 const accountMetadataCard = document.getElementById('accountMetadataCard');
 const participationModeBadge = document.getElementById('participationModeBadge');
 const accountDetailText = document.getElementById('accountDetailText');
 const duplicateAlertBadge = document.getElementById('duplicateAlertBadge');
 const evidenceScreenshotsCard = document.getElementById('evidenceScreenshotsCard');
 const screenshotsGallery = document.getElementById('screenshotsGallery');
+const importBtn = document.getElementById('importBtn');
+const mainImportBtn = document.getElementById('mainImportBtn');
+const exportCompilerBtn = document.getElementById('exportCompilerReportBtn');
+
+function showToast(message, type = 'info', title = '') {
+  let container = document.getElementById('toastContainer');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'toastContainer';
+    container.style.cssText = 'position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 99999; display: flex; flex-direction: column; gap: 0.5rem; max-width: 440px; pointer-events: none;';
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement('div');
+  const bg = type === 'error' ? '#2d1217' : type === 'warning' ? '#2a220e' : type === 'success' ? '#0f291e' : '#111e38';
+  const border = type === 'error' ? '#ef4444' : type === 'warning' ? '#f59e0b' : type === 'success' ? '#22c55e' : '#3b82f6';
+  const color = type === 'error' ? '#fca5a5' : type === 'warning' ? '#fde047' : type === 'success' ? '#86efac' : '#93c5fd';
+
+  toast.style.cssText = `pointer-events: auto; background: ${bg}; border: 1px solid ${border}; color: ${color}; padding: 0.85rem 1.1rem; border-radius: 8px; font-size: 0.875rem; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.6); display: flex; align-items: flex-start; gap: 0.75rem; transition: all 0.25s ease;`;
+  const icon = type === 'error' ? 'alert-octagon' : type === 'warning' ? 'alert-triangle' : type === 'success' ? 'check-circle' : 'info';
+
+  toast.innerHTML = `
+    <span data-lucide="${icon}" data-size="18" style="flex-shrink: 0; margin-top: 2px;"></span>
+    <div style="flex: 1;">
+      ${title ? `<div style="font-weight: 600; margin-bottom: 0.2rem; color: #fff;">${title}</div>` : ''}
+      <div style="line-height: 1.4; word-break: break-word;">${message}</div>
+    </div>
+  `;
+  container.appendChild(toast);
+  if (window.replaceLucideIcons) window.replaceLucideIcons();
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 300);
+  }, 4500);
+}
+
+function openScreenshotLightbox(base64Data, filename, reason) {
+  let lightbox = document.getElementById('screenshotLightbox');
+  if (!lightbox) {
+    lightbox = document.createElement('div');
+    lightbox.id = 'screenshotLightbox';
+    lightbox.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100000; backdrop-filter: blur(6px); padding: 2rem; cursor: pointer;';
+    lightbox.innerHTML = `
+      <div style="max-width: 92vw; max-height: 88vh; display: flex; flex-direction: column; align-items: center;" onclick="event.stopPropagation()">
+        <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; color: #fff;">
+          <div>
+            <h4 id="lightboxTitle" style="margin: 0; font-size: 1rem; font-weight: 600;">Evidence Screenshot</h4>
+            <div id="lightboxReason" style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;"></div>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="lightboxCloseBtn">Close</button>
+        </div>
+        <img id="lightboxImg" style="max-width: 100%; max-height: 78vh; border-radius: 6px; border: 1px solid #334155; object-fit: contain; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7);" />
+      </div>
+    `;
+    document.body.appendChild(lightbox);
+    lightbox.onclick = () => { lightbox.style.display = 'none'; };
+    document.getElementById('lightboxCloseBtn').onclick = () => { lightbox.style.display = 'none'; };
+  }
+  document.getElementById('lightboxTitle').textContent = filename || 'Evidence Screenshot';
+  document.getElementById('lightboxReason').textContent = reason || '';
+  document.getElementById('lightboxImg').src = `data:image/bmp;base64,${base64Data}`;
+  lightbox.style.display = 'flex';
+}
 
 function renderParticipants() {
   participantsList.innerHTML = '';
-  Object.keys(participantsData).forEach(key => {
+  const keys = Object.keys(participantsData);
+
+  if (keys.length === 0) {
+    participantsList.innerHTML = `
+      <div style="padding: 2rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+        <span data-lucide="inbox" data-size="28" style="display: block; margin: 0 auto 0.5rem; opacity: 0.4;"></span>
+        No archives loaded.<br>Click <strong>Import Archive</strong> above to load a participant .warmac or .sqlite file.
+      </div>
+    `;
+    if (window.replaceLucideIcons) window.replaceLucideIcons();
+    return;
+  }
+
+  keys.forEach(key => {
     const p = participantsData[key];
     const card = document.createElement('div');
     card.className = `participant-card ${key === currentParticipantKey ? 'active' : ''}`;
     card.dataset.key = key;
 
-    let verdictClass = 'verdict-safe';
-    if (p.verdict === 'UNSAFE') verdictClass = 'verdict-unsafe';
-    if (p.verdict === 'REVIEW REQUIRED') verdictClass = 'verdict-review';
+    const pillClass = p.verdict === 'SAFE'
+      ? 'pill-safe'
+      : p.verdict === 'UNSAFE'
+      ? 'pill-unsafe'
+      : 'pill-review';
 
     card.innerHTML = `
-      <div class="participant-name">${p.name}</div>
+      <div class="participant-card-header">
+        <span class="participant-name">${p.name}</span>
+        <span class="verdict-pill-mini ${pillClass}">${p.verdict}</span>
+      </div>
       <div class="participant-meta">
-        <span class="verdict-tag ${verdictClass}">${p.verdict}</span>
-        <span>${p.totalEvents} events</span>
+        <span><span data-lucide="activity" data-size="12"></span> ${p.totalEvents} events</span>
+        <span><span data-lucide="alert-circle" data-size="12"></span> ${p.criticalFindings} findings</span>
       </div>
     `;
-
-    card.addEventListener('click', () => {
-      loadParticipant(key);
-    });
-
+    card.addEventListener('click', () => loadParticipant(key));
     participantsList.appendChild(card);
   });
+
+  if (window.replaceLucideIcons) window.replaceLucideIcons();
 }
 
 function loadParticipant(key) {
   currentParticipantKey = key;
   const p = participantsData[key];
-  if (!p) return;
+  if (!p) {
+    if (emptyStateCard) emptyStateCard.style.display = 'block';
+    if (inspectorContent) inspectorContent.style.display = 'none';
+    if (selectedParticipantTitle) selectedParticipantTitle.textContent = 'No Evidence Archive Loaded';
+    if (verdictBanner) verdictBanner.style.display = 'none';
+    return;
+  }
+
+  if (emptyStateCard) emptyStateCard.style.display = 'none';
+  if (inspectorContent) inspectorContent.style.display = 'block';
 
   document.querySelectorAll('.participant-card').forEach(c => {
     c.classList.toggle('active', c.dataset.key === key);
   });
 
-  selectedParticipantTitle.textContent = `${p.name} (Review)`;
-  inspectorContent.style.display = 'block';
+  selectedParticipantTitle.textContent = p.name;
   verdictBanner.style.display = 'block';
   verdictPill.textContent = p.verdict;
-
-  verdictPill.className = 'verdict-pill';
-  if (p.verdict === 'SAFE') verdictPill.classList.add('verdict-safe');
-  else if (p.verdict === 'UNSAFE') verdictPill.classList.add('verdict-unsafe');
-  else verdictPill.classList.add('verdict-review');
-
-  statHashChain.textContent = p.hashChain;
-  statTotalEvents.textContent = p.totalEvents;
-  statCriticalFindings.textContent = p.criticalFindings;
-  statGaps.textContent = p.gaps;
+  verdictPill.className = `verdict-pill pill-${p.verdict.toLowerCase().replace(/\s+/g, '-')}`;
 
   if (p.participationMode === 'GeneratedAccounts' || p.authenticatedAccountId) {
     accountMetadataCard.style.display = 'block';
     participationModeBadge.textContent = 'Mode B (Generated Accounts)';
-    accountDetailText.textContent = `Account UUID: ${p.authenticatedAccountId || 'Unknown'}`;
+    participationModeBadge.className = 'badge badge-primary';
+    accountDetailText.innerHTML = `Authenticated Account UUID: <code>${p.authenticatedAccountId || 'Unassigned'}</code>`;
   } else if (p.declaredLogName) {
     accountMetadataCard.style.display = 'block';
     participationModeBadge.textContent = 'Mode A (No Accounts)';
-    accountDetailText.textContent = `Self-declared handle: "${p.declaredLogName}" (Self-reported, unverified)`;
+    participationModeBadge.className = 'badge badge-outline';
+    accountDetailText.innerHTML = `Self-declared handle: <strong>"${p.declaredLogName}"</strong> <span class="badge badge-warning" style="margin-left: 0.5rem;">Unverified Self-Report</span>`;
   } else {
     accountMetadataCard.style.display = 'none';
   }
 
-  findingsList.innerHTML = '';
-  if (p.findings.length === 0) {
-    findingsList.innerHTML = `<div style="color: #22c55e;"><span data-lucide="check-circle" data-size="16"></span> No violations or policy anomalies detected. All events adhere to contest parameters.</div>`;
-  } else {
-    p.findings.forEach(f => {
-      const item = document.createElement('div');
-      item.className = 'finding-item';
-      item.innerHTML = `
-        <div class="finding-title" style="color: #ef4444;"><span data-lucide="alert-triangle" data-size="16"></span> ${f.title} (${f.time})</div>
-        <div class="finding-desc">${f.desc}</div>
-        <div class="finding-seqs">Supporting Audit Sequences: [${f.seqs.join(', ')}]</div>
-      `;
-      findingsList.appendChild(item);
-    });
-  }
+  statHashChain.textContent = p.hashChain;
+  statHashChain.className = p.hashChain.includes('VERIFIED') ? 'value text-success' : 'value text-danger';
+  statTotalEvents.textContent = p.totalEvents;
+  statCriticalFindings.textContent = p.criticalFindings;
+  statGaps.textContent = p.gaps;
 
-  aiSummaryBody.innerHTML = `
-    <div class="ai-section">
-      <h4><span data-lucide="check-circle" data-size="16"></span> Verified Forensic Facts (Deterministic)</h4>
-      <ul>${p.aiSummary.facts.map(f => `<li>${f}</li>`).join('')}</ul>
-    </div>
-    <div class="ai-section mt-2">
-      <h4><span data-lucide="info" data-size="16"></span> Contextual Inferences (Advisory)</h4>
-      <ul>${p.aiSummary.inferences.map(i => `<li>${i}</li>`).join('')}</ul>
-    </div>
-    <div class="ai-section mt-2">
-      <h4><span data-lucide="shield" data-size="16"></span> Recommended Action</h4>
-      <ul>${p.aiSummary.recommendations.map(r => `<li>${r}</li>`).join('')}</ul>
-    </div>
-  `;
-
-  if (p.screenshots && p.screenshots.length > 0) {
-    if (evidenceScreenshotsCard) evidenceScreenshotsCard.style.display = 'block';
-    if (screenshotsGallery) {
-      screenshotsGallery.innerHTML = p.screenshots.map((s, idx) => `
-        <div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 0.75rem; overflow: hidden;">
-          <div style="font-weight: 600; color: #38bdf8; font-size: 0.85rem; margin-bottom: 0.25rem;">Capture #${idx + 1} (${s.filename})</div>
-          <div style="color: #94a3b8; font-size: 0.75rem; margin-bottom: 0.5rem;">${s.reason}</div>
-          <img src="data:image/bmp;base64,${s.data_base64}" style="width: 100%; border-radius: 4px; border: 1px solid #334155; cursor: pointer;" onclick="window.open(this.src)" alt="${s.filename}" />
-          <div style="color: #64748b; font-size: 0.7rem; margin-top: 0.25rem; font-family: monospace;">Time: ${s.timestamp_rfc3339}</div>
-        </div>
-      `).join('');
-    }
-  } else {
-    if (evidenceScreenshotsCard) evidenceScreenshotsCard.style.display = 'none';
-  }
-
-  renderCompilerActivity(p);
+  renderFindings(p);
+  renderScreenshots(p);
+  renderAiSummary(p);
   renderTimeline(p);
+  renderCompilerActivity(p);
 
-  if (window.replaceLucideIcons) {
-    window.replaceLucideIcons();
+  if (window.replaceLucideIcons) window.replaceLucideIcons();
+}
+
+function renderFindings(p) {
+  findingsList.innerHTML = '';
+  if (!p.findings || p.findings.length === 0) {
+    findingsList.innerHTML = `
+      <div style="padding: 1rem; color: #22c55e; display: flex; align-items: center; gap: 0.5rem; background: rgba(34, 197, 94, 0.05); border-radius: 6px;">
+        <span data-lucide="check-circle-2" data-size="18"></span>
+        <span>Clean Audit: Zero prohibited applications, local AI inference, or restricted network domain visits detected.</span>
+      </div>
+    `;
+    return;
   }
+
+  p.findings.forEach(f => {
+    const item = document.createElement('div');
+    const isCrit = f.severity === 'critical' || f.severity === 'Critical';
+    item.className = `finding-item ${isCrit ? 'finding-critical' : 'finding-warning'}`;
+    item.innerHTML = `
+      <div class="finding-header">
+        <span class="finding-title" style="font-weight: 600; display: flex; align-items: center; gap: 0.4rem;">
+          <span data-lucide="${isCrit ? 'alert-triangle' : 'info'}" data-size="16"></span>
+          ${f.title}
+        </span>
+        <span class="badge ${isCrit ? 'badge-danger' : 'badge-warning'}">${f.severity.toUpperCase()}</span>
+      </div>
+      <p class="finding-desc" style="margin-top: 0.4rem; line-height: 1.4;">${f.description || f.desc}</p>
+      ${f.supporting_sequences && f.supporting_sequences.length > 0 ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem;">Audit Sequence References: [${f.supporting_sequences.join(', ')}]</div>` : ''}
+    `;
+    findingsList.appendChild(item);
+  });
+}
+
+function renderScreenshots(p) {
+  if (!p.screenshots || p.screenshots.length === 0) {
+    evidenceScreenshotsCard.style.display = 'none';
+    return;
+  }
+
+  evidenceScreenshotsCard.style.display = 'block';
+  screenshotsGallery.innerHTML = '';
+
+  p.screenshots.forEach(sc => {
+    const card = document.createElement('div');
+    card.style.cssText = 'background: #090d16; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; cursor: pointer; transition: transform 0.15s ease;';
+    card.innerHTML = `
+      <div style="height: 140px; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative;">
+        <img src="data:image/bmp;base64,${sc.data_base64}" style="width: 100%; height: 100%; object-fit: cover;" alt="Evidence capture" />
+        <span class="badge badge-danger" style="position: absolute; top: 6px; left: 6px; font-size: 0.7rem;">EVIDENCE</span>
+      </div>
+      <div style="padding: 0.6rem 0.75rem; flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <div style="font-size: 0.8rem; font-weight: 600; color: #f1f5f9; word-break: break-all;">${sc.filename}</div>
+          <div style="font-size: 0.75rem; color: #f87171; margin-top: 2px;">${sc.reason || 'Security event trigger'}</div>
+        </div>
+        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+          <span>${sc.timestamp_rfc3339 ? sc.timestamp_rfc3339.slice(11, 19) + ' UTC' : ''}</span>
+          <span style="color: #38bdf8;">Click to View</span>
+        </div>
+      </div>
+    `;
+    card.addEventListener('click', () => {
+      openScreenshotLightbox(sc.data_base64, sc.filename, sc.reason);
+    });
+    screenshotsGallery.appendChild(card);
+  });
+}
+
+function renderAiSummary(p) {
+  aiSummaryBody.innerHTML = '';
+  const facts = p.aiSummary?.facts || [];
+  const inferences = p.aiSummary?.inferences || [];
+  const recs = p.aiSummary?.recommendations || [];
+
+  let html = '';
+
+  if (facts.length > 0) {
+    html += '<div style="margin-bottom: 0.75rem;"><strong style="color: #60a5fa; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;">Verified Cryptographic Facts:</strong><ul style="margin: 0.4rem 0 0 1.2rem; padding: 0;">';
+    facts.forEach(f => { html += `<li style="margin-bottom: 0.3rem;">${f}</li>`; });
+    html += '</ul></div>';
+  }
+
+  if (inferences.length > 0) {
+    html += '<div style="margin-bottom: 0.75rem;"><strong style="color: #c084fc; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;">Deterministic Forensics &amp; Behavioral Inferences:</strong><ul style="margin: 0.4rem 0 0 1.2rem; padding: 0;">';
+    inferences.forEach(inf => { html += `<li style="margin-bottom: 0.3rem;">${inf}</li>`; });
+    html += '</ul></div>';
+  }
+
+  if (recs.length > 0) {
+    html += '<div><strong style="color: #34d399; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;">Recommended Jury Action:</strong><ul style="margin: 0.4rem 0 0 1.2rem; padding: 0;">';
+    recs.forEach(r => { html += `<li style="margin-bottom: 0.3rem;">${r}</li>`; });
+    html += '</ul></div>';
+  }
+
+  aiSummaryBody.innerHTML = html || '<div style="color: var(--text-muted);">No AI executive summary generated.</div>';
 }
 
 function renderCompilerActivity(p) {
-  if (!compilerActivityContent) return;
   if (!p.compilerActivity || p.compilerActivity.length === 0) {
-    compilerActivityContent.innerHTML = `<span style="color: #64748b;">No built-in compiler attempts recorded for this participant.</span>`;
+    compilerActivityContent.innerHTML = 'No built-in compiler attempts recorded for this participant. (Absence does not imply external compiler use).';
     return;
   }
 
@@ -243,16 +291,28 @@ function renderCompilerActivity(p) {
   p.compilerActivity.forEach((c, idx) => {
     html += `
       <div style="border-bottom: 1px solid #1e293b; padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
-        <div style="color: #38bdf8; font-weight: bold;">Attempt #${idx + 1} - ${c.sourceFile} (${c.timestamp})</div>
-        <div style="color: #94a3b8; font-size: 0.8rem; margin: 0.2rem 0;">Source SHA-256: <code>${c.sourceSha256}</code></div>
-        <div style="color: #94a3b8; font-size: 0.8rem; margin: 0.2rem 0;">Compiler: ${c.compilerVersion} | Args: <code>${c.compilationArgs.join(' ')}</code></div>
-        <div style="color: #22c55e; font-size: 0.85rem;">Status: ${c.diagnostics}</div>
-        ${c.executableHash ? `<div style="color: #e2e8f0; font-size: 0.8rem;">Output Binary SHA-256: <code>${c.executableHash}</code> (Exit Code: ${c.exitCode})</div>` : ''}
-        ${c.stdout ? `<div style="background: #090d16; padding: 0.4rem; border-radius: 4px; margin-top: 0.4rem; color: #a5f3fc;">Stdout: ${c.stdout.trim()}</div>` : ''}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+          <span style="color: #38bdf8; font-weight: bold;">Attempt #${idx + 1} (${c.source_file || c.sourceFile}) - ${c.timestamp}</span>
+          <span class="badge ${c.exit_code === 0 || c.exitCode === 0 ? 'badge-primary' : 'badge-danger'}">Exit Code: ${c.exit_code ?? c.exitCode ?? 0}</span>
+        </div>
+        <div style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 0.3rem;">
+          Compiler: ${c.compiler_version || c.compilerVersion || 'GNU G++'} | SHA-256: <code>${(c.source_sha256 || c.sourceSha256 || '').slice(0, 16)}...</code>
+        </div>
+        ${c.diagnostics ? `<div style="background: #090d16; padding: 0.4rem; border-radius: 4px; color: #f87171; font-size: 0.8rem; margin-bottom: 0.4rem; white-space: pre-wrap;">${c.diagnostics.trim()}</div>` : ''}
+        ${c.source_snapshot || c.sourceSnapshot ? `<details style="margin-top: 0.4rem;"><summary style="cursor: pointer; color: #a5f3fc; font-size: 0.8rem;">View C++ Source Snapshot</summary><pre style="background: #090d16; padding: 0.5rem; border-radius: 4px; margin-top: 0.4rem; overflow-x: auto; color: #e2e8f0; font-size: 0.8rem;">${escapeHtml(c.source_snapshot || c.sourceSnapshot)}</pre></details>` : ''}
       </div>
     `;
   });
   compilerActivityContent.innerHTML = html;
+}
+
+function escapeHtml(text) {
+  return String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function renderTimeline(p) {
@@ -261,8 +321,8 @@ function renderTimeline(p) {
     ? p.timeline
     : p.timeline.filter(t => t.cat === currentFilter);
 
-  if (filtered.length === 0) {
-    timelineTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #64748b;">No events matching filter "${currentFilter}".</td></tr>`;
+  if (!filtered || filtered.length === 0) {
+    timelineTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #64748b; padding: 1.5rem;">No events matching filter "${currentFilter}".</td></tr>`;
     return;
   }
 
@@ -270,10 +330,10 @@ function renderTimeline(p) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="font-mono">${t.seq}</td>
-      <td class="font-mono text-muted">${t.time}</td>
+      <td class="font-mono text-muted" style="font-size: 0.8rem;">${t.time}</td>
       <td><span class="badge badge-outline">${t.cat}</span></td>
-      <td>${t.details}</td>
-      <td class="font-mono text-muted">${t.hash}</td>
+      <td style="line-height: 1.4;">${t.details}</td>
+      <td class="font-mono text-muted" style="font-size: 0.75rem;">${t.hash}</td>
     `;
     timelineTbody.appendChild(tr);
   });
@@ -296,118 +356,164 @@ themeToggle.addEventListener('click', () => {
 });
 
 saveDecisionBtn.addEventListener('click', () => {
+  const p = participantsData[currentParticipantKey];
+  if (!p) return;
   const notes = document.getElementById('judgeNotes').value;
-  alert(`Verdict and notes for ${participantsData[currentParticipantKey].name} successfully recorded!`);
+  showToast(`Official verdict [${p.verdict}] and notes recorded for ${p.name}.`, 'success', 'Decision Saved');
 });
 
-const importBtn = document.getElementById('importBtn');
-if (importBtn) {
-  importBtn.addEventListener('click', async () => {
-    let dbPath = null;
-    if (window.__TAURI__ && window.__TAURI__.core) {
-      try {
-        dbPath = await window.__TAURI__.core.invoke('pick_evidence_file');
-      } catch (e) {
-        dbPath = null;
-      }
+async function triggerImport() {
+  let dbPath = null;
+  if (window.__TAURI__ && window.__TAURI__.core) {
+    try {
+      dbPath = await window.__TAURI__.core.invoke('pick_evidence_file');
+    } catch (e) {
+      dbPath = null;
     }
-    if (!dbPath) {
-      dbPath = prompt('Enter path to participant evidence.sqlite:');
-    }
-    if (!dbPath) return;
+  }
 
-    if (window.__TAURI__ && window.__TAURI__.core) {
-      try {
-        const res = await window.__TAURI__.core.invoke('verify_evidence_db', {
-          dbPath,
-          keyPath: null
-        });
+  if (!dbPath) {
+    return;
+  }
 
-        const newKey = `import-${Date.now()}`;
-        participantsData[newKey] = {
-          name: `${res.participant_id} (Imported)`,
-          verdict: res.verdict,
-          hashChain: 'VERIFIED (SHA-256)',
-          totalEvents: res.total_events,
-          criticalFindings: res.violations.length,
-          gaps: 0,
-          participationMode: res.participation_mode,
-          authenticatedAccountId: res.authenticated_account_id,
-          declaredLogName: res.declared_log_name,
-          screenshots: res.screenshots || [],
-          findings: res.violations.map(v => ({ severity: 'critical', title: 'Violation', desc: v, seqs: [], time: '' })),
-          aiSummary: {
-            facts: [`Total audit events: ${res.total_events}`, `Verdict: ${res.verdict}`],
-            inferences: [res.ai_advisory],
-            recommendations: ['Review timeline logs below.']
-          },
-          timeline: [
-            { seq: 1, time: new Date().toISOString(), cat: 'AuditReport', details: res.summary_text, hash: 'verified...ok' }
-          ]
-        };
+  showToast(`Decrypting and verifying audit package: ${dbPath.split(/[/\\]/).pop()}`, 'info', 'Importing Archive');
 
-        const allAccountIds = Object.values(participantsData)
-          .map(p => p.authenticatedAccountId)
-          .filter(Boolean);
+  if (window.__TAURI__ && window.__TAURI__.core) {
+    try {
+      const res = await window.__TAURI__.core.invoke('verify_evidence_db', {
+        dbPath,
+        keyPath: null
+      });
 
-        const dupRes = await window.__TAURI__.core.invoke('check_duplicate_accounts', {
-          accountIds: allAccountIds
-        });
+      const key = res.session_id || `import-${Date.now()}`;
 
-        if (dupRes.has_duplicates) {
-          duplicateAlertBadge.style.display = 'inline-flex';
-          alert('WARNING: ' + dupRes.findings.join('\n'));
+      const timelineEvents = (res.timeline || []).map(t => {
+        let details = '';
+        if (typeof t.payload_json === 'object' && t.payload_json !== null) {
+          if (t.category === 'Process') {
+            const action = t.payload_json.action || 'Started';
+            const name = t.payload_json.name || 'Process';
+            const pid = t.payload_json.pid ? ` (PID: ${t.payload_json.pid})` : '';
+            const ports = t.payload_json.listening_ports && t.payload_json.listening_ports.length > 0
+              ? ` [Listening Ports: ${t.payload_json.listening_ports.join(', ')}]`
+              : '';
+            const cmd = t.payload_json.cmdline ? ` | cmd: ${t.payload_json.cmdline}` : '';
+            details = `${action}: ${name}${pid}${ports}${cmd}`;
+          } else if (t.category === 'Browser') {
+            const dom = t.payload_json.domain || 'Domain';
+            const title = t.payload_json.window_title ? ` | Window: "${t.payload_json.window_title}"` : '';
+            details = `Restricted Domain / AI Navigation: ${dom}${title}`;
+          } else if (t.category === 'Network') {
+            const conn = t.payload_json.is_connected ? 'Connected' : 'Disconnected';
+            const iface = t.payload_json.interface_name || 'Interface';
+            const ssid = t.payload_json.ssid ? ` | SSID: "${t.payload_json.ssid}"` : '';
+            details = `${conn} Network Adapter: ${iface}${ssid}`;
+          } else if (t.category === 'Compiler') {
+            const src = t.payload_json.source_path || 'source.cpp';
+            const code = t.payload_json.program_exit_code ?? t.payload_json.compiler_exit_code ?? 0;
+            const diag = t.payload_json.compiler_diagnostics ? ` | ${t.payload_json.compiler_diagnostics.slice(0, 100)}` : '';
+            details = `Compiler Attempt: ${src} (Exit: ${code})${diag}`;
+          } else if (t.category === 'Auth') {
+            details = `Authentication Event: ${t.payload_json.action || ''} (Username: ${t.payload_json.username || ''})`;
+          } else if (t.category === 'SystemLifecycle') {
+            const evt = t.payload_json.event_type || 'Lifecycle';
+            const det = t.payload_json.details ? ` - ${t.payload_json.details}` : '';
+            details = `${evt}${det}`;
+          } else {
+            details = JSON.stringify(t.payload_json);
+          }
+        } else {
+          details = String(t.payload_json);
         }
 
-        renderParticipants();
-        loadParticipant(newKey);
-        alert(`Evidence verified: Verdict is ${res.verdict}`);
-      } catch (err) {
-        alert(`Verification failed: ${err}`);
+        return {
+          seq: t.sequence_number,
+          time: t.timestamp_rfc3339,
+          cat: t.category,
+          details,
+          hash: t.current_hash ? (t.current_hash.slice(0, 8) + '...' + t.current_hash.slice(-4)) : ''
+        };
+      });
+
+      participantsData[key] = {
+        name: res.participant_id,
+        verdict: res.verdict,
+        hashChain: res.hash_chain_verified ? 'VERIFIED (SHA-256)' : 'TAMPERED / FAILED',
+        totalEvents: res.total_events,
+        criticalFindings: (res.findings || []).filter(f => f.severity === 'Critical' || f.severity === 'critical').length,
+        gaps: 0,
+        participationMode: res.participation_mode,
+        authenticatedAccountId: res.authenticated_account_id,
+        declaredLogName: res.declared_log_name,
+        screenshots: res.screenshots || [],
+        findings: res.findings || [],
+        aiSummary: {
+          facts: res.verified_facts || [`Total audit events verified: ${res.total_events}`, `Verdict: ${res.verdict}`],
+          inferences: res.contextual_inferences || [res.ai_advisory],
+          recommendations: res.recommendations || ['Review forensic timeline and screenshots.']
+        },
+        timeline: timelineEvents,
+        compilerActivity: res.compiler_activities || []
+      };
+
+      const allAccountIds = Object.values(participantsData)
+        .map(p => p.authenticatedAccountId)
+        .filter(Boolean);
+
+      const dupRes = await window.__TAURI__.core.invoke('check_duplicate_accounts', {
+        accountIds: allAccountIds
+      });
+
+      if (dupRes.has_duplicates) {
+        duplicateAlertBadge.style.display = 'inline-flex';
+        showToast(dupRes.findings.join(' | '), 'warning', 'Duplicate Account Detected');
+      } else {
+        duplicateAlertBadge.style.display = 'none';
       }
-    } else {
-      alert(`[Browser Preview] Evidence imported from ${dbPath} (Simulated).`);
+
+      renderParticipants();
+      loadParticipant(key);
+      showToast(`Participant ${res.participant_id} verified. Classification: ${res.verdict}`, res.verdict === 'SAFE' ? 'success' : 'error', 'Audit Verification Complete');
+    } catch (err) {
+      showToast(`Failed to parse or decrypt evidence archive: ${err}`, 'error', 'Verification Failed');
     }
-  });
+  }
 }
 
-const exportCompilerBtn = document.getElementById('exportCompilerReportBtn');
+if (importBtn) importBtn.addEventListener('click', triggerImport);
+if (mainImportBtn) mainImportBtn.addEventListener('click', triggerImport);
+
 if (exportCompilerBtn) {
   exportCompilerBtn.addEventListener('click', () => {
     const p = participantsData[currentParticipantKey];
     if (!p) return;
-    let md = `# Compiler Activity Forensic Report: ${p.name}\n\n`;
-    md += `Contest: GOCUP 1 | Generated: ${new Date().toISOString()}\n\n`;
-    if (p.compilerActivity && p.compilerActivity.length > 0) {
-      p.compilerActivity.forEach((c, idx) => {
-        md += `## Attempt #${idx + 1} (${c.timestamp})\n`;
-        md += `- Source File: \`${c.sourceFile}\`\n`;
-        md += `- Source SHA-256: \`${c.sourceSha256}\`\n`;
-        md += `- Compiler Version: ${c.compilerVersion}\n`;
-        md += `- Command: \`g++ ${c.compilationArgs.join(' ')}\`\n`;
-        md += `- Diagnostics: ${c.diagnostics}\n`;
-        if (c.executableHash) {
-          md += `- Executable Hash: \`${c.executableHash}\`\n`;
-          md += `- Exit Code: ${c.exitCode}\n`;
-          md += `- Stdout: \`${c.stdout}\`\n`;
-        }
-        md += `\n### Source Snapshot:\n\`\`\`cpp\n${c.sourceSnapshot}\n\`\`\`\n\n`;
-      });
+    let md = `# Compiler Forensic Audit Report: ${p.name}\n\n`;
+    md += `Generated: ${new Date().toISOString()} | Verdict: ${p.verdict}\n\n`;
+    if (!p.compilerActivity || p.compilerActivity.length === 0) {
+      md += `No compiler activity recorded in hash chain.\n`;
     } else {
-      md += `*No built-in compiler events recorded for this participant.*\n`;
+      p.compilerActivity.forEach((c, idx) => {
+        md += `## Attempt #${idx + 1} - ${c.source_file || c.sourceFile} (${c.timestamp})\n`;
+        md += `- **Compiler**: ${c.compiler_version || c.compilerVersion}\n`;
+        md += `- **Exit Code**: ${c.exit_code ?? c.exitCode ?? 0}\n`;
+        md += `- **SHA-256**: \`${c.source_sha256 || c.sourceSha256}\`\n\n`;
+        if (c.source_snapshot || c.sourceSnapshot) {
+          md += `### Source Code Snapshot\n\`\`\`cpp\n${c.source_snapshot || c.sourceSnapshot}\n\`\`\`\n\n`;
+        }
+      });
     }
-    const blob = new Blob([md], { type: 'text/markdown' });
+
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `compiler-activity-${currentParticipantKey}.md`;
+    a.download = `${p.name}_compiler_report.md`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    showToast(`Exported compiler forensic report to ${a.download}`, 'success', 'Report Exported');
   });
 }
 
 renderParticipants();
-loadParticipant(currentParticipantKey);
-if (window.replaceLucideIcons) {
-  window.replaceLucideIcons();
-}
