@@ -38,6 +38,8 @@ pub struct EvidenceAttachmentRef {
     pub size_bytes: u64,
     pub captured_at: DateTime<Utc>,
     pub reason: String,
+    #[serde(default)]
+    pub contest_relative_time: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -52,7 +54,7 @@ pub struct EvidenceAttachment {
     pub captured_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProcessEventPayload {
     pub pid: u32,
     pub name: String,
@@ -63,6 +65,14 @@ pub struct ProcessEventPayload {
     pub screenshot_attachment: Option<EvidenceAttachmentRef>,
     #[serde(default)]
     pub listening_ports: Vec<u16>,
+    #[serde(default)]
+    pub cpu_usage: Option<f32>,
+    #[serde(default)]
+    pub memory_bytes: Option<u64>,
+    #[serde(default)]
+    pub is_anomalous_resource: bool,
+    #[serde(default)]
+    pub contest_relative_time: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,6 +88,10 @@ pub struct BrowserEventPayload {
     pub window_title: Option<String>,
     pub browser_exe: Option<String>,
     pub is_restricted: bool,
+    #[serde(default)]
+    pub is_ai_suspect: bool,
+    #[serde(default)]
+    pub contest_relative_time: Option<String>,
     #[serde(default)]
     pub screenshot_attachment: Option<EvidenceAttachmentRef>,
 }

@@ -32,6 +32,14 @@ pub struct WarmacSessionMetadata {
     pub final_hash: String,
     pub exported_at: DateTime<Utc>,
     pub authenticated_account_id: Option<Uuid>,
+    #[serde(default)]
+    pub start_time: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub end_time: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub file_tamper_count: u64,
+    #[serde(default)]
+    pub file_tamper_attempts: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -90,6 +98,9 @@ pub fn create_warmac_package(
     session_id: Uuid,
     authenticated_account_id: Option<Uuid>,
     attachments: &[(String, Vec<u8>)],
+    start_time: Option<DateTime<Utc>>,
+    end_time: Option<DateTime<Utc>>,
+    file_tamper_attempts: &[String],
 ) -> Result<PathBuf> {
     let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
 
@@ -173,6 +184,10 @@ pub fn create_warmac_package(
         final_hash: last_h,
         exported_at: Utc::now(),
         authenticated_account_id,
+        start_time,
+        end_time,
+        file_tamper_count: file_tamper_attempts.len() as u64,
+        file_tamper_attempts: file_tamper_attempts.to_vec(),
     };
 
     files.insert(
@@ -283,7 +298,13 @@ pub fn create_warmac_package(
 
     let tmp_path = output_path.with_extension("warmac.tmp");
     fs::write(&tmp_path, &container).map_err(|e| WarmError::Io(e.to_string()))?;
-    fs::rename(&tmp_path, output_path).map_err(|e| WarmError::Io(e.to_string()))?;
+    if output_path.exists() {
+        let _ = fs::remove_file(output_path);
+    }
+    if fs::rename(&tmp_path, output_path).is_err() {
+        let _ = fs::copy(&tmp_path, output_path);
+        let _ = fs::remove_file(&tmp_path);
+    }
 
     Ok(output_path.to_path_buf())
 }
@@ -516,6 +537,9 @@ mod tests {
             session_id,
             None,
             &attachments,
+            None,
+            None,
+            &[],
         )
         .unwrap();
 

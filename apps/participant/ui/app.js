@@ -202,23 +202,9 @@ startSessionBtn.addEventListener('click', () => {
   startSession();
 });
 
-concludeSessionBtn.addEventListener('click', async () => {
-  state.sessionActive = false;
-  clearInterval(state.timerInterval);
-
-  sessionStatusIndicator.className = 'status-indicator status-idle';
-  sessionStatusText.textContent = 'Session Concluded';
-
-  if (window.__TAURI__ && window.__TAURI__.core) {
-    try {
-      await window.__TAURI__.core.invoke('conclude_session');
-    } catch (e) {
-      console.warn('Conclude error:', e);
-    }
-  }
-
-  showToast('Session concluded. Navigate to Export Evidence tab to export your audit log.', 'success', 5000);
-  switchToTab('exportTab');
+concludeSessionBtn.addEventListener('click', async (e) => {
+  e.preventDefault();
+  showToast('Monitoring is active and protected. Connect the Official Proctor USB drive to conclude and export this contest.', 'warning', 6000);
 });
 
 const browseExportDirBtn = document.getElementById('browseExportDirBtn');

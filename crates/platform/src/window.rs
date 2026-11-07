@@ -25,7 +25,7 @@ impl WindowObserver {
         let windows = Self::enumerate_all_windows();
 
         for (pid, title) in windows {
-            if let Some((domain, is_restricted)) = self.classify_window(&title) {
+            if let Some((domain, is_restricted, is_ai_suspect)) = self.classify_window(&title) {
                 let key = format!("{}:{}:{}", domain, pid, title);
                 let should_report = match self.reported_windows.get(&key) {
                     Some(last_reported) => {
@@ -41,6 +41,8 @@ impl WindowObserver {
                         window_title: Some(title),
                         browser_exe: None,
                         is_restricted,
+                        is_ai_suspect,
+                        contest_relative_time: None,
                         screenshot_attachment: None,
                     });
                 }
@@ -62,18 +64,20 @@ impl WindowObserver {
             window_title: Some(title.to_string()),
             browser_exe: Some(browser.to_string()),
             is_restricted,
+            is_ai_suspect: is_restricted,
+            contest_relative_time: None,
             screenshot_attachment: None,
         }
     }
 
-    fn classify_window(&self, title: &str) -> Option<(String, bool)> {
+    fn classify_window(&self, title: &str) -> Option<(String, bool, bool)> {
         let lower = title.to_lowercase();
 
         for domain in &self.policy.restricted_domains {
             let dom_lower = domain.to_lowercase();
             let dom_clean = dom_lower.strip_prefix("www.").unwrap_or(&dom_lower);
             if lower.contains(dom_clean) {
-                return Some((domain.clone(), true));
+                return Some((domain.clone(), true, true));
             }
         }
 
@@ -98,12 +102,53 @@ impl WindowObserver {
             ("text generation webui", "oobabooga.local"),
             ("vllm", "vllm.local"),
             ("jupyter", "jupyter.local"),
+            ("mistral", "mistral.ai"),
+            ("qwen", "qwen.ai"),
+            ("cohere", "cohere.com"),
+            ("together.ai", "together.ai"),
+            ("groq", "groq.com"),
+            ("replicate", "replicate.com"),
         ];
 
         for (pattern, domain) in ai_signatures {
             if lower.contains(pattern) {
-                return Some((domain.to_string(), true));
+                return Some((domain.to_string(), true, true));
             }
+        }
+
+        let has_ai_heuristic = lower.contains(".ai")
+            || lower.contains(" ai ")
+            || lower.contains("chat")
+            || lower.contains("bot")
+            || lower.contains("gpt")
+            || lower.contains("prompt")
+            || lower.contains("assistant")
+            || lower.contains("model");
+
+        let is_browser = lower.contains("chrome")
+            || lower.contains("edge")
+            || lower.contains("firefox")
+            || lower.contains("brave")
+            || lower.contains("opera")
+            || lower.contains("arc")
+            || lower.contains("vivaldi")
+            || lower.contains("safari")
+            || lower.contains("browser")
+            || lower.contains(" - ")
+            || lower.contains(" — ");
+
+        if is_browser {
+            let extracted = warm_policies::extract_clean_domain(title);
+            let domain = if extracted.is_empty() {
+                title.to_string()
+            } else {
+                extracted
+            };
+            return Some((domain, has_ai_heuristic, has_ai_heuristic));
+        }
+
+        if has_ai_heuristic {
+            return Some((title.to_string(), true, true));
         }
 
         None

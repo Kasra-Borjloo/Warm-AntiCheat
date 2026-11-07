@@ -107,6 +107,7 @@ body {
   gap: 8px;
 }
 
+.participant-card,
 .participant-item {
   padding: 12px 14px;
   background-color: var(--bg-primary);
@@ -114,30 +115,63 @@ body {
   border-radius: var(--card-radius);
   cursor: pointer;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  transition: all 0.2s;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.2s ease;
 }
 
+.participant-card:hover,
 .participant-item:hover {
   background-color: var(--bg-tertiary);
+  border-color: rgba(59, 130, 246, 0.4);
+  transform: translateY(-1px);
 }
 
+.participant-card.active,
 .participant-item.active {
   border-color: var(--accent-primary);
   background-color: var(--bg-tertiary);
+  box-shadow: 0 0 0 1px var(--accent-primary), 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
+.participant-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.participant-name,
 .p-name {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  word-break: break-all;
 }
 
+.verdict-pill-mini,
 .p-pill {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  padding: 3px 8px;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
   border-radius: 9999px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.participant-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.participant-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .pill-safe {

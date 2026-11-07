@@ -129,6 +129,9 @@ struct ActiveSession {
     authenticated_account_id: Option<Uuid>,
     concluded: AtomicBool,
     start_time: Instant,
+    start_time_utc: chrono::DateTime<Utc>,
+    concluded_time_utc: Mutex<Option<chrono::DateTime<Utc>>>,
+    tamper_attempts: Mutex<Vec<String>>,
     vault_key: [u8; 32],
 }
 
@@ -142,13 +145,9 @@ impl ActiveSession {
         fs::create_dir_all(&vault_dir).map_err(|e| e.to_string())?;
         let mut nonce = [0u8; 12];
         warm_crypto::generate_random_bytes(&mut nonce);
-        let ciphertext = warm_crypto::aes_gcm_encrypt(
-            &self.vault_key,
-            &nonce,
-            bmp_bytes,
-            filename.as_bytes(),
-        )
-        .map_err(|e| e.to_string())?;
+        let ciphertext =
+            warm_crypto::aes_gcm_encrypt(&self.vault_key, &nonce, bmp_bytes, filename.as_bytes())
+                .map_err(|e| e.to_string())?;
 
         let mut payload = Vec::with_capacity(12 + ciphertext.len());
         payload.extend_from_slice(&nonce);
@@ -253,14 +252,69 @@ impl ActiveSession {
         Ok(seq)
     }
 
+    fn format_contest_relative_time(&self, time: chrono::DateTime<Utc>) -> String {
+        let elapsed_secs = (time - self.start_time_utc).num_seconds().max(0);
+        let hours = elapsed_secs / 3600;
+        let mins = (elapsed_secs % 3600) / 60;
+        let secs = elapsed_secs % 60;
+        let ordinal_hour = hours + 1;
+        let ordinal_suffix = match ordinal_hour {
+            1 => "1st".to_string(),
+            2 => "2nd".to_string(),
+            3 => "3rd".to_string(),
+            h => format!("{}th", h),
+        };
+        format!(
+            "At {} hour of the contest ({:02}:{:02}:{:02} into contest)",
+            ordinal_suffix, hours, mins, secs
+        )
+    }
+
+    fn record_tamper_attempt(&self, reason: &str) {
+        let now = Utc::now();
+        let rel_time = self.format_contest_relative_time(now);
+        let record = format!("{}: {}", rel_time, reason);
+        self.tamper_attempts.lock().unwrap().push(record);
+    }
+
+    fn sync_live_warmac(&self) -> Result<(), String> {
+        let warmac_path = PathBuf::from(format!(
+            "./{}_{}.warmac",
+            self.contest_id, self.participant_id
+        ));
+        let attachments = self.read_and_decrypt_screenshots();
+        let end_time = *self.concluded_time_utc.lock().unwrap();
+        let tamper_records = self.tamper_attempts.lock().unwrap().clone();
+        warm_storage::create_warmac_package(
+            &warmac_path,
+            &self.raw_manifest_json,
+            &self.manifest_signature_hex,
+            &self.manifest_signing_key_pub_hex,
+            &self.judge_public_key,
+            &self.store,
+            self.contest_uuid,
+            &self.participant_id,
+            self.session_id,
+            self.authenticated_account_id,
+            &attachments,
+            Some(self.start_time_utc),
+            end_time,
+            &tamper_records,
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     fn conclude(&self) -> Result<(), String> {
         if self.concluded.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
+        *self.concluded_time_utc.lock().unwrap() = Some(Utc::now());
         let end_payload = LifecycleTracker::on_session_end();
         let json = serde_json::to_vec(&end_payload).map_err(|e| e.to_string())?;
         let _ = self.record_event(EventCategory::SystemLifecycle, &json);
         self.store.checkpoint().map_err(|e| e.to_string())?;
+        let _ = self.sync_live_warmac();
         Ok(())
     }
 }
@@ -440,6 +494,8 @@ fn package_and_export_warmac(
     fs::create_dir_all(target_dir).map_err(|e| e.to_string())?;
 
     let attachments = session.read_and_decrypt_screenshots();
+    let end_time = *session.concluded_time_utc.lock().unwrap();
+    let tamper_records = session.tamper_attempts.lock().unwrap().clone();
 
     let warmac_path = target_dir.join(format!(
         "{}_{}.warmac",
@@ -457,6 +513,9 @@ fn package_and_export_warmac(
         session.session_id,
         session.authenticated_account_id,
         &attachments,
+        Some(session.start_time_utc),
+        end_time,
+        &tamper_records,
     )
     .map_err(|e| e.to_string())?;
 
@@ -499,7 +558,11 @@ fn start_collector_loop(session: Arc<ActiveSession>, policy: MonitoringPolicy) {
 
             let procs = proc_collector.poll_events();
             for (_action, mut proc_payload, is_prohibited) in procs {
+                let rel_time = session.format_contest_relative_time(Utc::now());
+                proc_payload.contest_relative_time = Some(rel_time.clone());
+
                 let is_suspicious = is_prohibited
+                    || proc_payload.is_anomalous_resource
                     || !proc_payload.listening_ports.is_empty()
                     || proc_payload
                         .cmdline
@@ -528,9 +591,10 @@ fn start_collector_loop(session: Arc<ActiveSession>, policy: MonitoringPolicy) {
                                     size_bytes: size,
                                     captured_at: Utc::now(),
                                     reason: format!(
-                                        "Suspicious activity detected: {}",
-                                        proc_payload.name
+                                        "{}: Suspicious process detected: {}",
+                                        rel_time, proc_payload.name
                                     ),
+                                    contest_relative_time: Some(rel_time.clone()),
                                 });
                         }
                     }
@@ -543,7 +607,11 @@ fn start_collector_loop(session: Arc<ActiveSession>, policy: MonitoringPolicy) {
 
             let browser_events = window_observer.poll_events();
             for mut b_event in browser_events {
-                if b_event.is_restricted {
+                let rel_time = session.format_contest_relative_time(Utc::now());
+                b_event.contest_relative_time = Some(rel_time.clone());
+
+                let is_suspicious = b_event.is_restricted || b_event.is_ai_suspect;
+                if is_suspicious {
                     if let Some(bmp_bytes) = warm_platform::capture_screenshot() {
                         let att_id = Uuid::new_v4();
                         let filename =
@@ -564,9 +632,10 @@ fn start_collector_loop(session: Arc<ActiveSession>, policy: MonitoringPolicy) {
                                     size_bytes: size,
                                     captured_at: Utc::now(),
                                     reason: format!(
-                                        "Restricted browser activity: {}",
-                                        b_event.domain
+                                        "{}: Restricted website / window activity: {}",
+                                        rel_time, b_event.domain
                                     ),
+                                    contest_relative_time: Some(rel_time.clone()),
                                 });
                         }
                     }
@@ -589,6 +658,33 @@ fn start_collector_loop(session: Arc<ActiveSession>, policy: MonitoringPolicy) {
                 if let Ok(json) = serde_json::to_vec(&hb) {
                     let _ = session.record_event(EventCategory::SystemLifecycle, &json);
                 }
+            }
+        }
+    });
+}
+
+fn start_warmac_watchdog_loop(session: Arc<ActiveSession>) {
+    thread::spawn(move || {
+        let warmac_path = PathBuf::from(format!(
+            "./{}_{}.warmac",
+            session.contest_id, session.participant_id
+        ));
+        let mut last_sync = Instant::now();
+        let _ = session.sync_live_warmac();
+
+        while SESSION_RUNNING.load(Ordering::SeqCst) {
+            thread::sleep(Duration::from_millis(500));
+            if !SESSION_RUNNING.load(Ordering::SeqCst) {
+                break;
+            }
+
+            let file_missing = !warmac_path.exists();
+            if file_missing {
+                session.record_tamper_attempt("Tamper alert: .warmac container was deleted by participant! Recreated immediately.");
+                let _ = session.sync_live_warmac();
+            } else if last_sync.elapsed() >= Duration::from_secs(5) {
+                last_sync = Instant::now();
+                let _ = session.sync_live_warmac();
             }
         }
     });
@@ -885,6 +981,9 @@ fn start_monitoring_session(participant_id: String) -> Result<String, String> {
         authenticated_account_id,
         concluded: AtomicBool::new(false),
         start_time: Instant::now(),
+        start_time_utc: Utc::now(),
+        concluded_time_utc: Mutex::new(None),
+        tamper_attempts: Mutex::new(Vec::new()),
         vault_key,
     });
 
@@ -925,7 +1024,8 @@ fn start_monitoring_session(participant_id: String) -> Result<String, String> {
     *ACTIVE_SESSION.lock().unwrap() = Some(session.clone());
     SESSION_RUNNING.store(true, Ordering::SeqCst);
 
-    start_collector_loop(session, policy);
+    start_collector_loop(session.clone(), policy);
+    start_warmac_watchdog_loop(session.clone());
     start_usb_watcher();
 
     Ok(format!(
@@ -935,15 +1035,7 @@ fn start_monitoring_session(participant_id: String) -> Result<String, String> {
 
 #[tauri::command]
 fn conclude_session() -> Result<String, String> {
-    let guard = ACTIVE_SESSION.lock().unwrap();
-    if let Some(session) = guard.as_ref() {
-        session.conclude()?;
-        SESSION_RUNNING.store(false, Ordering::SeqCst);
-        Ok("Competition session concluded successfully.".to_string())
-    } else {
-        SESSION_RUNNING.store(false, Ordering::SeqCst);
-        Ok("Session concluded.".to_string())
-    }
+    Err("Direct manual session conclusion is disabled. This contest session can only be concluded and exported using the Official Proctor USB drive.".to_string())
 }
 
 #[tauri::command]

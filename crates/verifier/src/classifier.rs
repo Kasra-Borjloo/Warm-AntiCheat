@@ -60,6 +60,8 @@ pub struct ScreenshotEvidence {
     pub timestamp_rfc3339: String,
     pub reason: String,
     pub data_base64: String,
+    #[serde(default)]
+    pub contest_relative_time: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -229,6 +231,20 @@ impl ForensicVerifier {
             archive.metadata.authenticated_account_id,
         )?;
 
+        if archive.metadata.file_tamper_count > 0 {
+            report.findings.push(ForensicFinding {
+                severity: FindingSeverity::Critical,
+                title: "Unauthorized Evidence File Tampering / Deletion Detected".to_string(),
+                description: format!(
+                    "Participant attempted to delete or modify the .warmac container {} times. Attempt records: {:?}",
+                    archive.metadata.file_tamper_count, archive.metadata.file_tamper_attempts
+                ),
+                supporting_sequences: vec![],
+                timestamps: archive.metadata.file_tamper_attempts.clone(),
+            });
+            report.classification = VerdictClassification::Unsafe;
+        }
+
         for (rel_path, content) in &archive.files {
             if rel_path.starts_with(&format!("sessions/{}/screenshots/", archive.session_id)) {
                 let filename = rel_path
@@ -237,16 +253,52 @@ impl ForensicVerifier {
                     .unwrap_or("screenshot.bmp")
                     .to_string();
                 let b64 = base64::engine::general_purpose::STANDARD.encode(content);
+
+                let mut rel_time = None;
+                let mut reason_str =
+                    "Event-triggered screenshot evidence captured during suspicious activity"
+                        .to_string();
+                let mut seq_num = 0;
+                let mut ts_str = archive.metadata.exported_at.to_rfc3339();
+
+                for ev in &report.timeline {
+                    if let Ok(proc_ev) = serde_json::from_value::<warm_events::ProcessEventPayload>(
+                        ev.payload_json.clone(),
+                    ) {
+                        if let Some(att) = proc_ev.screenshot_attachment {
+                            if att.filename == filename {
+                                rel_time = att.contest_relative_time;
+                                reason_str = att.reason;
+                                seq_num = ev.sequence_number;
+                                ts_str = att.captured_at.to_rfc3339();
+                                break;
+                            }
+                        }
+                    }
+                    if let Ok(b_ev) = serde_json::from_value::<warm_events::BrowserEventPayload>(
+                        ev.payload_json.clone(),
+                    ) {
+                        if let Some(att) = b_ev.screenshot_attachment {
+                            if att.filename == filename {
+                                rel_time = att.contest_relative_time;
+                                reason_str = att.reason;
+                                seq_num = ev.sequence_number;
+                                ts_str = att.captured_at.to_rfc3339();
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 report.screenshots.push(ScreenshotEvidence {
                     attachment_id: Uuid::new_v4(),
                     filename,
                     mime_type: "image/bmp".to_string(),
-                    triggering_sequence: 0,
-                    timestamp_rfc3339: archive.metadata.exported_at.to_rfc3339(),
-                    reason:
-                        "Event-triggered screenshot evidence captured during suspicious activity"
-                            .to_string(),
+                    triggering_sequence: seq_num,
+                    timestamp_rfc3339: ts_str,
+                    reason: reason_str,
                     data_base64: b64,
+                    contest_relative_time: rel_time,
                 });
             }
         }
@@ -606,6 +658,10 @@ mod tests {
             action: ProcessAction::Started,
             screenshot_attachment: None,
             listening_ports: vec![],
+            cpu_usage: None,
+            memory_bytes: None,
+            is_anomalous_resource: false,
+            contest_relative_time: None,
         };
         let payload_json = serde_json::to_vec(&proc_payload).unwrap();
         let payload_hash = sha256_digest(&payload_json);
@@ -718,6 +774,10 @@ mod tests {
             action: ProcessAction::Started,
             screenshot_attachment: None,
             listening_ports: Vec::new(),
+            cpu_usage: None,
+            memory_bytes: None,
+            is_anomalous_resource: false,
+            contest_relative_time: None,
         };
         let clean_json = serde_json::to_vec(&clean_proc).unwrap();
         let clean_hash = sha256_digest(&clean_json);
@@ -759,6 +819,10 @@ mod tests {
             action: ProcessAction::Started,
             screenshot_attachment: None,
             listening_ports: vec![],
+            cpu_usage: None,
+            memory_bytes: None,
+            is_anomalous_resource: false,
+            contest_relative_time: None,
         };
         let ai_json = serde_json::to_vec(&ai_proc).unwrap();
         let ai_hash = sha256_digest(&ai_json);

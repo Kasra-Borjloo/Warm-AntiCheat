@@ -5,6 +5,8 @@ use sysinfo::{ProcessesToUpdate, System};
 use warm_events::{ProcessAction, ProcessEventPayload};
 use warm_policies::AppPolicy;
 
+type ProcessSample = (String, Option<String>, Option<String>, f32, u64);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObservedProcess {
     pub pid: u32,
@@ -43,7 +45,11 @@ impl ProcessCollector {
                     .join(" "),
             );
 
+            let cpu = proc.cpu_usage();
+            let mem = proc.memory();
+            let is_anomalous_resource = cpu > 40.0 || mem > 1_073_741_824;
             let is_prohibited = policy.is_prohibited(&name)
+                || is_anomalous_resource
                 || cmdline
                     .as_deref()
                     .and_then(AppPolicy::inspect_command_line)
@@ -60,6 +66,10 @@ impl ProcessCollector {
                         action: ProcessAction::Started,
                         screenshot_attachment: None,
                         listening_ports: Vec::new(),
+                        cpu_usage: Some(cpu),
+                        memory_bytes: Some(mem),
+                        is_anomalous_resource,
+                        contest_relative_time: None,
                     },
                     true,
                 ));
@@ -91,6 +101,10 @@ impl ProcessCollector {
                     action: ProcessAction::Started,
                     screenshot_attachment: None,
                     listening_ports: vec![port],
+                    cpu_usage: None,
+                    memory_bytes: None,
+                    is_anomalous_resource: true,
+                    contest_relative_time: None,
                 },
                 true,
             ));
@@ -115,7 +129,7 @@ impl ProcessCollector {
 
         self.system.refresh_processes(ProcessesToUpdate::All, true);
 
-        let current_pids: HashMap<u32, (String, Option<String>, Option<String>)> = self
+        let current_pids: HashMap<u32, ProcessSample> = self
             .system
             .processes()
             .iter()
@@ -132,14 +146,18 @@ impl ProcessCollector {
                                 .collect::<Vec<_>>()
                                 .join(" "),
                         ),
+                        proc.cpu_usage(),
+                        proc.memory(),
                     ),
                 )
             })
             .collect();
 
-        for (&pid, (name, path, cmdline)) in &current_pids {
+        for (&pid, (name, path, cmdline, cpu, mem)) in &current_pids {
             if !self.known_pids.contains_key(&pid) {
+                let is_anomalous_resource = *cpu > 40.0 || *mem > 1_073_741_824;
                 let is_prohibited = self.policy.is_prohibited(name)
+                    || is_anomalous_resource
                     || cmdline
                         .as_deref()
                         .and_then(AppPolicy::inspect_command_line)
@@ -153,6 +171,10 @@ impl ProcessCollector {
                     action: ProcessAction::Started,
                     screenshot_attachment: None,
                     listening_ports: Vec::new(),
+                    cpu_usage: Some(*cpu),
+                    memory_bytes: Some(*mem),
+                    is_anomalous_resource,
+                    contest_relative_time: None,
                 };
 
                 self.known_pids.insert(
@@ -187,6 +209,10 @@ impl ProcessCollector {
                     action: ProcessAction::Terminated,
                     screenshot_attachment: None,
                     listening_ports: Vec::new(),
+                    cpu_usage: None,
+                    memory_bytes: None,
+                    is_anomalous_resource: false,
+                    contest_relative_time: None,
                 };
                 events.push((ProcessAction::Terminated, payload, proc.is_prohibited));
             }
@@ -206,6 +232,10 @@ impl ProcessCollector {
                         action: ProcessAction::Started,
                         screenshot_attachment: None,
                         listening_ports: vec![port],
+                        cpu_usage: None,
+                        memory_bytes: None,
+                        is_anomalous_resource: false,
+                        contest_relative_time: None,
                     },
                     true,
                 ));
@@ -251,6 +281,10 @@ impl ProcessCollector {
             action: ProcessAction::Started,
             screenshot_attachment: None,
             listening_ports: Vec::new(),
+            cpu_usage: None,
+            memory_bytes: None,
+            is_anomalous_resource: false,
+            contest_relative_time: None,
         };
         (ProcessAction::Started, payload, is_prohibited)
     }

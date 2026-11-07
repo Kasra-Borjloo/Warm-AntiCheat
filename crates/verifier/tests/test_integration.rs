@@ -171,6 +171,10 @@ fn test_end_to_end_full_contest_lifecycle() {
         action: ProcessAction::Started,
         screenshot_attachment: None,
         listening_ports: vec![11434],
+        cpu_usage: None,
+        memory_bytes: None,
+        is_anomalous_resource: false,
+        contest_relative_time: None,
     };
     let payload_bytes = serde_json::to_vec(&proc_payload).unwrap();
     let payload_h = sha256_digest(&payload_bytes);
@@ -832,6 +836,9 @@ fn test_end_to_end_crash_recovery_and_warmac_container() {
         size_bytes: fake_bmp.len() as u64,
         captured_at: Utc::now(),
         reason: "Prohibited AI process detected: ollama.exe".to_string(),
+        contest_relative_time: Some(
+            "At 1st hour of the contest (00:05:00 into contest)".to_string(),
+        ),
     };
 
     let proc_payload = ProcessEventPayload {
@@ -842,6 +849,10 @@ fn test_end_to_end_crash_recovery_and_warmac_container() {
         action: ProcessAction::Started,
         screenshot_attachment: Some(att_ref),
         listening_ports: vec![11434],
+        cpu_usage: None,
+        memory_bytes: None,
+        is_anomalous_resource: false,
+        contest_relative_time: None,
     };
     let proc_json = serde_json::to_vec(&proc_payload).unwrap();
     let proc_hash = sha256_digest(&proc_json);
@@ -885,6 +896,9 @@ fn test_end_to_end_crash_recovery_and_warmac_container() {
         rec_sid,
         None,
         &attachments,
+        Some(Utc::now()),
+        Some(Utc::now()),
+        &[],
     )
     .unwrap();
 

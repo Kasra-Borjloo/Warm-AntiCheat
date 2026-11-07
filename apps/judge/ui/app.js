@@ -62,7 +62,7 @@ function showToast(message, type = 'info', title = '') {
   }, 4500);
 }
 
-function openScreenshotLightbox(base64Data, filename, reason) {
+function openScreenshotLightbox(base64Data, filename, reason, contestTime) {
   let lightbox = document.getElementById('screenshotLightbox');
   if (!lightbox) {
     lightbox = document.createElement('div');
@@ -85,7 +85,9 @@ function openScreenshotLightbox(base64Data, filename, reason) {
     document.getElementById('lightboxCloseBtn').onclick = () => { lightbox.style.display = 'none'; };
   }
   document.getElementById('lightboxTitle').textContent = filename || 'Evidence Screenshot';
-  document.getElementById('lightboxReason').textContent = reason || '';
+  const reasonText = reason || 'Security event trigger';
+  const timeText = contestTime ? ` | ${contestTime}` : '';
+  document.getElementById('lightboxReason').textContent = `${reasonText}${timeText}`;
   document.getElementById('lightboxImg').src = `data:image/bmp;base64,${base64Data}`;
   lightbox.style.display = 'flex';
 }
@@ -238,6 +240,7 @@ function renderScreenshots(p) {
         <div>
           <div style="font-size: 0.8rem; font-weight: 600; color: #f1f5f9; word-break: break-all;">${sc.filename}</div>
           <div style="font-size: 0.75rem; color: #f87171; margin-top: 2px;">${sc.reason || 'Security event trigger'}</div>
+          ${sc.contest_relative_time ? `<div style="font-size: 0.72rem; color: #38bdf8; margin-top: 3px; font-weight: 500;">${sc.contest_relative_time}</div>` : ''}
         </div>
         <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
           <span>${sc.timestamp_rfc3339 ? sc.timestamp_rfc3339.slice(11, 19) + ' UTC' : ''}</span>
@@ -246,7 +249,7 @@ function renderScreenshots(p) {
       </div>
     `;
     card.addEventListener('click', () => {
-      openScreenshotLightbox(sc.data_base64, sc.filename, sc.reason);
+      openScreenshotLightbox(sc.data_base64, sc.filename, sc.reason, sc.contest_relative_time);
     });
     screenshotsGallery.appendChild(card);
   });
@@ -330,7 +333,10 @@ function renderTimeline(p) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="font-mono">${t.seq}</td>
-      <td class="font-mono text-muted" style="font-size: 0.8rem;">${t.time}</td>
+      <td class="font-mono text-muted" style="font-size: 0.8rem;">
+        <div>${t.time}</div>
+        ${t.relTime ? `<div style="color: #38bdf8; font-size: 0.72rem; margin-top: 2px; font-weight: 500;">${t.relTime}</div>` : ''}
+      </td>
       <td><span class="badge badge-outline">${t.cat}</span></td>
       <td style="line-height: 1.4;">${t.details}</td>
       <td class="font-mono text-muted" style="font-size: 0.75rem;">${t.hash}</td>
@@ -398,11 +404,23 @@ async function triggerImport() {
               ? ` [Listening Ports: ${t.payload_json.listening_ports.join(', ')}]`
               : '';
             const cmd = t.payload_json.cmdline ? ` | cmd: ${t.payload_json.cmdline}` : '';
-            details = `${action}: ${name}${pid}${ports}${cmd}`;
+            const metrics = [];
+            if (t.payload_json.cpu_usage !== undefined && t.payload_json.cpu_usage !== null) {
+              metrics.push(`CPU: ${t.payload_json.cpu_usage.toFixed(1)}%`);
+            }
+            if (t.payload_json.memory_bytes !== undefined && t.payload_json.memory_bytes !== null) {
+              metrics.push(`RAM: ${(t.payload_json.memory_bytes / (1024 * 1024)).toFixed(0)}MB`);
+            }
+            const resStr = metrics.length > 0 ? ` [${metrics.join(', ')}]` : '';
+            const anomalyStr = t.payload_json.is_anomalous_resource ? ' <span class="badge badge-warning" style="font-size: 0.7rem;">ANOMALOUS RESOURCE USAGE</span>' : '';
+            const relTimeStr = t.payload_json.contest_relative_time ? ` <span style="color: #38bdf8; font-size: 0.75rem;">[${t.payload_json.contest_relative_time}]</span>` : '';
+            details = `${action}: ${name}${pid}${resStr}${anomalyStr}${ports}${cmd}${relTimeStr}`;
           } else if (t.category === 'Browser') {
             const dom = t.payload_json.domain || 'Domain';
             const title = t.payload_json.window_title ? ` | Window: "${t.payload_json.window_title}"` : '';
-            details = `Restricted Domain / AI Navigation: ${dom}${title}`;
+            const aiBadge = t.payload_json.is_ai_suspect ? ' <span class="badge badge-danger" style="font-size: 0.7rem;">AI SUSPECT</span>' : (t.payload_json.is_restricted ? ' <span class="badge badge-warning" style="font-size: 0.7rem;">RESTRICTED</span>' : '');
+            const relTimeStr = t.payload_json.contest_relative_time ? ` <span style="color: #38bdf8; font-size: 0.75rem;">[${t.payload_json.contest_relative_time}]</span>` : '';
+            details = `Browser / Window Activity: ${dom}${title}${aiBadge}${relTimeStr}`;
           } else if (t.category === 'Network') {
             const conn = t.payload_json.is_connected ? 'Connected' : 'Disconnected';
             const iface = t.payload_json.interface_name || 'Interface';
@@ -429,6 +447,7 @@ async function triggerImport() {
         return {
           seq: t.sequence_number,
           time: t.timestamp_rfc3339,
+          relTime: (t.payload_json && t.payload_json.contest_relative_time) || null,
           cat: t.category,
           details,
           hash: t.current_hash ? (t.current_hash.slice(0, 8) + '...' + t.current_hash.slice(-4)) : ''
