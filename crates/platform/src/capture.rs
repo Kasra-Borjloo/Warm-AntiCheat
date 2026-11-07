@@ -12,7 +12,7 @@ pub fn capture_screenshot() -> Option<Vec<u8>> {
 
         let width = GetSystemMetrics(SM_CXSCREEN);
         let height = GetSystemMetrics(SM_CYSCREEN);
-        if width <= 0 || height <= 0 {
+        if width <= 0 || height <= 0 || width > 16384 || height > 16384 {
             ReleaseDC(ptr::null_mut(), hdc_screen);
             return None;
         }
@@ -85,31 +85,35 @@ pub fn capture_screenshot() -> Option<Vec<u8>> {
             return None;
         }
 
-        let file_header_len = 14;
-        let info_header_len = 40;
-        let file_size = (file_header_len + info_header_len + img_bytes_len) as u32;
+        let mut rgb = Vec::with_capacity((width * height * 3) as usize);
+        for y in 0..height {
+            let row_start = (y as usize) * (row_stride as usize);
+            for x in 0..width {
+                let src = row_start + (x as usize) * 3;
+                let b = pixels[src];
+                let g = pixels[src + 1];
+                let r = pixels[src + 2];
+                rgb.push(r);
+                rgb.push(g);
+                rgb.push(b);
+            }
+        }
 
-        let mut bmp = Vec::with_capacity(file_size as usize);
-        bmp.extend_from_slice(b"BM");
-        bmp.extend_from_slice(&file_size.to_le_bytes());
-        bmp.extend_from_slice(&[0u8; 4]);
-        let offset = (file_header_len + info_header_len) as u32;
-        bmp.extend_from_slice(&offset.to_le_bytes());
-
-        bmp.extend_from_slice(&40u32.to_le_bytes());
-        bmp.extend_from_slice(&width.to_le_bytes());
-        bmp.extend_from_slice(&(-height).to_le_bytes());
-        bmp.extend_from_slice(&1u16.to_le_bytes());
-        bmp.extend_from_slice(&24u16.to_le_bytes());
-        bmp.extend_from_slice(&BI_RGB.to_le_bytes());
-        bmp.extend_from_slice(&(img_bytes_len as u32).to_le_bytes());
-        bmp.extend_from_slice(&0u32.to_le_bytes());
-        bmp.extend_from_slice(&0u32.to_le_bytes());
-        bmp.extend_from_slice(&0u32.to_le_bytes());
-        bmp.extend_from_slice(&0u32.to_le_bytes());
-
-        bmp.extend_from_slice(&pixels);
-        Some(bmp)
+        let mut jpeg_bytes = Vec::new();
+        let encoder = jpeg_encoder::Encoder::new(&mut jpeg_bytes, 75);
+        if encoder
+            .encode(
+                &rgb,
+                width as u16,
+                height as u16,
+                jpeg_encoder::ColorType::Rgb,
+            )
+            .is_ok()
+        {
+            Some(jpeg_bytes)
+        } else {
+            None
+        }
     }
 }
 

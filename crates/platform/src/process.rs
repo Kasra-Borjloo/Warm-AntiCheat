@@ -16,6 +16,94 @@ pub struct ObservedProcess {
     pub is_prohibited: bool,
 }
 
+pub fn is_self_or_system(name: &str) -> bool {
+    let lower = name.trim().to_lowercase();
+    let base = lower.strip_suffix(".exe").unwrap_or(&lower);
+    matches!(
+        base,
+        "warm_participant_app"
+            | "warm-anticheat-participant"
+            | "warm-anticheat"
+            | "warm-participant"
+            | "warm_judge_app"
+            | "warm_builder_app"
+            | "warm-contest-maker"
+            | "system"
+            | "system idle process"
+            | "registry"
+            | "smss"
+            | "csrss"
+            | "wininit"
+            | "services"
+            | "lsass"
+            | "svchost"
+            | "fontdrvhost"
+            | "dwm"
+            | "explorer"
+            | "sihost"
+            | "taskhostw"
+            | "conhost"
+            | "runtimebroker"
+            | "searchindexer"
+            | "searchhost"
+            | "startmenuexperiencehost"
+            | "shellexperiencehost"
+            | "textinputhost"
+            | "ctfmon"
+            | "spoolsv"
+            | "smartscreen"
+            | "securityhealthservice"
+            | "mpcmdrun"
+            | "msmpeng"
+            | "audiodg"
+            | "init"
+            | "systemd"
+            | "dbus-daemon"
+            | "launchd"
+            | "windowserver"
+            | "kernel_task"
+    )
+}
+
+pub fn is_whitelisted_process(name: &str) -> bool {
+    if is_self_or_system(name) {
+        return true;
+    }
+    let lower = name.trim().to_lowercase();
+    let base = lower.strip_suffix(".exe").unwrap_or(&lower);
+    matches!(
+        base,
+        "code"
+            | "devenv"
+            | "clion64"
+            | "clion"
+            | "pycharm64"
+            | "idea64"
+            | "sublime_text"
+            | "notepad++"
+            | "notepad"
+            | "gedit"
+            | "kate"
+            | "vim"
+            | "nvim"
+            | "emacs"
+            | "g++"
+            | "gcc"
+            | "gdb"
+            | "lldb"
+            | "make"
+            | "ninja"
+            | "rustc"
+            | "cargo"
+            | "msedge"
+            | "chrome"
+            | "firefox"
+            | "brave"
+            | "safari"
+            | "opera"
+    )
+}
+
 pub struct ProcessCollector {
     system: System,
     policy: AppPolicy,
@@ -47,13 +135,18 @@ impl ProcessCollector {
 
             let cpu = proc.cpu_usage();
             let mem = proc.memory();
-            let is_anomalous_resource = cpu > 40.0 || mem > 1_073_741_824;
-            let is_prohibited = policy.is_prohibited(&name)
-                || is_anomalous_resource
-                || cmdline
-                    .as_deref()
-                    .and_then(AppPolicy::inspect_command_line)
-                    .is_some();
+            let is_whitelisted = is_whitelisted_process(&name);
+            let is_anomalous_resource = !is_whitelisted && (cpu > 75.0 || mem > 2_147_483_648);
+            let is_prohibited = if is_self_or_system(&name) {
+                false
+            } else {
+                policy.is_prohibited(&name)
+                    || is_anomalous_resource
+                    || cmdline
+                        .as_deref()
+                        .and_then(AppPolicy::inspect_command_line)
+                        .is_some()
+            };
 
             if is_prohibited {
                 pending_initial_events.push((
@@ -155,13 +248,19 @@ impl ProcessCollector {
 
         for (&pid, (name, path, cmdline, cpu, mem)) in &current_pids {
             if !self.known_pids.contains_key(&pid) {
-                let is_anomalous_resource = *cpu > 40.0 || *mem > 1_073_741_824;
-                let is_prohibited = self.policy.is_prohibited(name)
-                    || is_anomalous_resource
-                    || cmdline
-                        .as_deref()
-                        .and_then(AppPolicy::inspect_command_line)
-                        .is_some();
+                let is_whitelisted = is_whitelisted_process(name);
+                let is_anomalous_resource =
+                    !is_whitelisted && (*cpu > 75.0 || *mem > 2_147_483_648);
+                let is_prohibited = if is_self_or_system(name) {
+                    false
+                } else {
+                    self.policy.is_prohibited(name)
+                        || is_anomalous_resource
+                        || cmdline
+                            .as_deref()
+                            .and_then(AppPolicy::inspect_command_line)
+                            .is_some()
+                };
 
                 let payload = ProcessEventPayload {
                     pid,

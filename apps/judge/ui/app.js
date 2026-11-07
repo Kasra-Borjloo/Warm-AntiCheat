@@ -62,7 +62,7 @@ function showToast(message, type = 'info', title = '') {
   }, 4500);
 }
 
-function openScreenshotLightbox(base64Data, filename, reason, contestTime) {
+function openScreenshotLightbox(base64Data, filename, reason, contestTime, mimeType) {
   let lightbox = document.getElementById('screenshotLightbox');
   if (!lightbox) {
     lightbox = document.createElement('div');
@@ -88,7 +88,8 @@ function openScreenshotLightbox(base64Data, filename, reason, contestTime) {
   const reasonText = reason || 'Security event trigger';
   const timeText = contestTime ? ` | ${contestTime}` : '';
   document.getElementById('lightboxReason').textContent = `${reasonText}${timeText}`;
-  document.getElementById('lightboxImg').src = `data:image/bmp;base64,${base64Data}`;
+  const mime = mimeType || (filename && (filename.endsWith('.jpg') || filename.endsWith('.jpeg')) ? 'image/jpeg' : 'image/bmp');
+  document.getElementById('lightboxImg').src = `data:${mime};base64,${base64Data}`;
   lightbox.style.display = 'flex';
 }
 
@@ -231,9 +232,10 @@ function renderScreenshots(p) {
   p.screenshots.forEach(sc => {
     const card = document.createElement('div');
     card.style.cssText = 'background: #090d16; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; cursor: pointer; transition: transform 0.15s ease;';
+    const mime = sc.mime_type || (sc.filename && (sc.filename.endsWith('.jpg') || sc.filename.endsWith('.jpeg')) ? 'image/jpeg' : 'image/bmp');
     card.innerHTML = `
       <div style="height: 140px; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative;">
-        <img src="data:image/bmp;base64,${sc.data_base64}" style="width: 100%; height: 100%; object-fit: cover;" alt="Evidence capture" />
+        <img src="data:${mime};base64,${sc.data_base64}" style="width: 100%; height: 100%; object-fit: cover;" alt="Evidence capture" />
         <span class="badge badge-danger" style="position: absolute; top: 6px; left: 6px; font-size: 0.7rem;">EVIDENCE</span>
       </div>
       <div style="padding: 0.6rem 0.75rem; flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
@@ -249,7 +251,7 @@ function renderScreenshots(p) {
       </div>
     `;
     card.addEventListener('click', () => {
-      openScreenshotLightbox(sc.data_base64, sc.filename, sc.reason, sc.contest_relative_time);
+      openScreenshotLightbox(sc.data_base64, sc.filename, sc.reason, sc.contest_relative_time, sc.mime_type);
     });
     screenshotsGallery.appendChild(card);
   });

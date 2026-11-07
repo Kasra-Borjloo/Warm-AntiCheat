@@ -571,22 +571,22 @@ fn start_collector_loop(session: Arc<ActiveSession>, policy: MonitoringPolicy) {
                         .is_some();
 
                 if is_suspicious {
-                    if let Some(bmp_bytes) = warm_platform::capture_screenshot() {
+                    if let Some(jpeg_bytes) = warm_platform::capture_screenshot() {
                         let att_id = Uuid::new_v4();
                         let filename =
-                            format!("{}_{}.bmp", att_id, Utc::now().format("%Y%m%d_%H%M%S"));
-                        let sha = warm_crypto::sha256_digest(&bmp_bytes);
-                        let size = bmp_bytes.len() as u64;
+                            format!("{}_{}.jpg", att_id, Utc::now().format("%Y%m%d_%H%M%S"));
+                        let sha = warm_crypto::sha256_digest(&jpeg_bytes);
+                        let size = jpeg_bytes.len() as u64;
 
                         if session
-                            .encrypt_and_store_screenshot(&bmp_bytes, &filename)
+                            .encrypt_and_store_screenshot(&jpeg_bytes, &filename)
                             .is_ok()
                         {
                             proc_payload.screenshot_attachment =
                                 Some(warm_events::EvidenceAttachmentRef {
                                     attachment_id: att_id,
                                     filename,
-                                    mime_type: "image/bmp".to_string(),
+                                    mime_type: "image/jpeg".to_string(),
                                     sha256_hash: sha,
                                     size_bytes: size,
                                     captured_at: Utc::now(),
@@ -612,22 +612,22 @@ fn start_collector_loop(session: Arc<ActiveSession>, policy: MonitoringPolicy) {
 
                 let is_suspicious = b_event.is_restricted || b_event.is_ai_suspect;
                 if is_suspicious {
-                    if let Some(bmp_bytes) = warm_platform::capture_screenshot() {
+                    if let Some(jpeg_bytes) = warm_platform::capture_screenshot() {
                         let att_id = Uuid::new_v4();
                         let filename =
-                            format!("{}_{}.bmp", att_id, Utc::now().format("%Y%m%d_%H%M%S"));
-                        let sha = warm_crypto::sha256_digest(&bmp_bytes);
-                        let size = bmp_bytes.len() as u64;
+                            format!("{}_{}.jpg", att_id, Utc::now().format("%Y%m%d_%H%M%S"));
+                        let sha = warm_crypto::sha256_digest(&jpeg_bytes);
+                        let size = jpeg_bytes.len() as u64;
 
                         if session
-                            .encrypt_and_store_screenshot(&bmp_bytes, &filename)
+                            .encrypt_and_store_screenshot(&jpeg_bytes, &filename)
                             .is_ok()
                         {
                             b_event.screenshot_attachment =
                                 Some(warm_events::EvidenceAttachmentRef {
                                     attachment_id: att_id,
                                     filename,
-                                    mime_type: "image/bmp".to_string(),
+                                    mime_type: "image/jpeg".to_string(),
                                     sha256_hash: sha,
                                     size_bytes: size,
                                     captured_at: Utc::now(),
@@ -1516,6 +1516,14 @@ fn main() {
         println!("  warm_participant_app [ui]");
     } else {
         tauri::Builder::default()
+            .on_window_event(|window, event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    if SESSION_RUNNING.load(Ordering::SeqCst) {
+                        api.prevent_close();
+                        let _ = window.minimize();
+                    }
+                }
+            })
             .invoke_handler(tauri::generate_handler![
                 get_app_info,
                 enroll_participant,

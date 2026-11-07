@@ -17,7 +17,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Kasra Borjloo <kasraborjloo2009@gmail.com>"]
 edition = "2021"
 license = "GPL-3.0-only"
@@ -46,6 +46,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 hkdf = "0.12"
 subtle = "2.6"
 base64 = "0.22"
+jpeg-encoder = "0.7.1"
 tempfile = "3.12"
 tar = "0.4"
 tauri = { version = "2", default-features = false, features = ["wry", "common-controls-v6"] }
