@@ -1,0 +1,57 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/crypto",
+    "crates/events",
+    "crates/storage",
+    "crates/policies",
+    "crates/platform",
+    "crates/verifier",
+    "crates/audit",
+    "crates/builder_core",
+    "apps/builder",
+    "apps/participant",
+    "apps/judge",
+]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Kasra Borjloo <kasraborjloo2009@gmail.com>"]
+edition = "2021"
+license = "GPL-3.0-only"
+repository = "https://github.com/Kasra-Borjloo/Warm-AntiCheat"
+readme = "README.md"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.10", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1.0"
+anyhow = "1.0"
+sha2 = "0.10"
+aes-gcm = "0.10"
+x25519-dalek = { version = "2.0", features = ["static_secrets"] }
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+rand = "0.8"
+hex = "0.4"
+rusqlite = { version = "0.32", features = ["bundled"] }
+sysinfo = "0.32"
+tokio = { version = "1.40", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+hkdf = "0.12"
+subtle = "2.6"
+base64 = "0.22"
+
+# Internal crates
+warm_core = { path = "crates/core" }
+warm_crypto = { path = "crates/crypto" }
+warm_events = { path = "crates/events" }
+warm_storage = { path = "crates/storage" }
+warm_policies = { path = "crates/policies" }
+warm_platform = { path = "crates/platform" }
+warm_verifier = { path = "crates/verifier" }
+warm_audit = { path = "crates/audit" }
+warm_builder_core = { path = "crates/builder_core" }

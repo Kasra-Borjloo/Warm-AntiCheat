@@ -1,0 +1,15 @@
+[package]
+name = "warm_audit"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+warm_core.workspace = true
+warm_events.workspace = true
+warm_verifier.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono.workspace = true

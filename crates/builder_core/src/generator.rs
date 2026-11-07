@@ -1,0 +1,1 @@
+//! Contest distribution output generator

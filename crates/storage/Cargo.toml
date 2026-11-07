@@ -1,0 +1,19 @@
+[package]
+name = "warm_storage"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+warm_core.workspace = true
+warm_crypto.workspace = true
+warm_events.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+hex.workspace = true
