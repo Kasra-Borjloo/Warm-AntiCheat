@@ -1,14 +1,9 @@
 use crate::hash::sha256_digest;
 
-/// Generate a human-readable SHA-256 fingerprint for a public key.
-///
-/// Output format: `SHA256:<64-character lowercase hex digest>`
 pub fn compute_fingerprint(public_key_bytes: &[u8]) -> String {
     format!("SHA256:{}", sha256_digest(public_key_bytes))
 }
 
-/// Format key fingerprint with colon separation every 2 characters for visual inspection:
-/// e.g. `SHA256:a1:b2:c3:...`
 pub fn compute_colon_fingerprint(public_key_bytes: &[u8]) -> String {
     let hex_str = sha256_digest(public_key_bytes);
     let chunks: Vec<&str> = (0..hex_str.len())

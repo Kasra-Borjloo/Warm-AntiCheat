@@ -110,6 +110,8 @@ const accountMetadataCard = document.getElementById('accountMetadataCard');
 const participationModeBadge = document.getElementById('participationModeBadge');
 const accountDetailText = document.getElementById('accountDetailText');
 const duplicateAlertBadge = document.getElementById('duplicateAlertBadge');
+const evidenceScreenshotsCard = document.getElementById('evidenceScreenshotsCard');
+const screenshotsGallery = document.getElementById('screenshotsGallery');
 
 function renderParticipants() {
   participantsList.innerHTML = '';
@@ -206,6 +208,22 @@ function loadParticipant(key) {
     </div>
   `;
 
+  if (p.screenshots && p.screenshots.length > 0) {
+    if (evidenceScreenshotsCard) evidenceScreenshotsCard.style.display = 'block';
+    if (screenshotsGallery) {
+      screenshotsGallery.innerHTML = p.screenshots.map((s, idx) => `
+        <div style="background: #0f172a; border: 1px solid #1e293b; border-radius: 6px; padding: 0.75rem; overflow: hidden;">
+          <div style="font-weight: 600; color: #38bdf8; font-size: 0.85rem; margin-bottom: 0.25rem;">Capture #${idx + 1} (${s.filename})</div>
+          <div style="color: #94a3b8; font-size: 0.75rem; margin-bottom: 0.5rem;">${s.reason}</div>
+          <img src="data:image/bmp;base64,${s.data_base64}" style="width: 100%; border-radius: 4px; border: 1px solid #334155; cursor: pointer;" onclick="window.open(this.src)" alt="${s.filename}" />
+          <div style="color: #64748b; font-size: 0.7rem; margin-top: 0.25rem; font-family: monospace;">Time: ${s.timestamp_rfc3339}</div>
+        </div>
+      `).join('');
+    }
+  } else {
+    if (evidenceScreenshotsCard) evidenceScreenshotsCard.style.display = 'none';
+  }
+
   renderCompilerActivity(p);
   renderTimeline(p);
 
@@ -285,7 +303,17 @@ saveDecisionBtn.addEventListener('click', () => {
 const importBtn = document.getElementById('importBtn');
 if (importBtn) {
   importBtn.addEventListener('click', async () => {
-    const dbPath = prompt('Enter path to participant evidence.sqlite:');
+    let dbPath = null;
+    if (window.__TAURI__ && window.__TAURI__.core) {
+      try {
+        dbPath = await window.__TAURI__.core.invoke('pick_evidence_file');
+      } catch (e) {
+        dbPath = null;
+      }
+    }
+    if (!dbPath) {
+      dbPath = prompt('Enter path to participant evidence.sqlite:');
+    }
     if (!dbPath) return;
 
     if (window.__TAURI__ && window.__TAURI__.core) {
@@ -306,6 +334,7 @@ if (importBtn) {
           participationMode: res.participation_mode,
           authenticatedAccountId: res.authenticated_account_id,
           declaredLogName: res.declared_log_name,
+          screenshots: res.screenshots || [],
           findings: res.violations.map(v => ({ severity: 'critical', title: 'Violation', desc: v, seqs: [], time: '' })),
           aiSummary: {
             facts: [`Total audit events: ${res.total_events}`, `Verdict: ${res.verdict}`],

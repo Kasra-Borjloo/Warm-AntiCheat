@@ -2,7 +2,6 @@ use crate::engine::CompilationResult;
 use crate::runner::ExecutionResult;
 use warm_events::CompilerEventPayload;
 
-/// Utility to build an authenticated, encrypted audit event payload from compiler & execution results.
 pub fn build_compiler_audit_payload(
     comp: &CompilationResult,
     exec: Option<&ExecutionResult>,

@@ -1,4 +1,4 @@
-use crate::manifest::{ContestManifest, SignedContestManifest};
+use crate::manifest::{ContestExportAuthToken, ContestManifest, SignedContestManifest};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -10,14 +10,15 @@ use warm_crypto::{
 };
 use warm_policies::{AppPolicy, BrowserPolicy, MonitoringPolicy};
 
-/// High-level builder configuration passed by organizer UI / CLI.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContestBuildConfig {
     pub title: String,
     pub organizer: String,
     pub description: String,
-    pub start_time: DateTime<Utc>,
-    pub end_time: DateTime<Utc>,
+    #[serde(default)]
+    pub start_time: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub end_time: Option<DateTime<Utc>>,
     pub prohibited_apps: Vec<String>,
     pub restricted_domains: Vec<String>,
     pub supported_platforms: Vec<String>,
@@ -31,7 +32,6 @@ pub struct ContestBuildConfig {
     pub account_count: usize,
 }
 
-/// Result returned after successful contest distribution package generation.
 #[derive(Debug, Clone)]
 pub struct ContestDistBundle {
     pub contest_id: String,
@@ -40,11 +40,45 @@ pub struct ContestDistBundle {
     pub judge_private_key_path: PathBuf,
     pub manifest_signing_key_priv_path: PathBuf,
     pub checksums_path: PathBuf,
+    pub participant_client_path: Option<PathBuf>,
 }
 
-/// Generates the complete, standardized contest distribution output.
+fn locate_participant_binary() -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+
+    if let Ok(p) = std::env::var("WARM_PARTICIPANT_BIN") {
+        candidates.push(PathBuf::from(p));
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("warm_participant_app.exe"));
+            candidates.push(dir.join("warm_participant_app"));
+            candidates.push(dir.join("../warm_participant_app.exe"));
+            candidates.push(dir.join("../warm_participant_app"));
+        }
+    }
+
+    candidates.push(PathBuf::from(
+        "C:/warm_target/debug/warm_participant_app.exe",
+    ));
+    candidates.push(PathBuf::from(
+        "C:/warm_target/release/warm_participant_app.exe",
+    ));
+    candidates.push(PathBuf::from("./target/debug/warm_participant_app.exe"));
+    candidates.push(PathBuf::from("./target/release/warm_participant_app.exe"));
+    candidates.push(PathBuf::from("../target/debug/warm_participant_app.exe"));
+    candidates.push(PathBuf::from("../target/release/warm_participant_app.exe"));
+    candidates.push(PathBuf::from("../../target/debug/warm_participant_app.exe"));
+    candidates.push(PathBuf::from(
+        "../../target/release/warm_participant_app.exe",
+    ));
+
+    candidates.into_iter().find(|c| c.exists() && c.is_file())
+}
+
 pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<ContestDistBundle> {
-    let contest = Contest::new(
+    let contest = Contest::with_times(
         &config.title,
         &config.organizer,
         &config.description,
@@ -59,11 +93,11 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
     let client_macos_dir = client_dir.join("macos");
     let judge_dir = contest_dir.join("judge");
     let judge_keys_dir = judge_dir.join("keys");
+    let judge_usb_dir = judge_dir.join("usb_token");
     let manifests_dir = contest_dir.join("manifests");
     let config_dir = contest_dir.join("configuration");
     let checksums_dir = contest_dir.join("checksums");
 
-    // Create directory hierarchy
     for d in [
         &contest_dir,
         &client_dir,
@@ -72,6 +106,7 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
         &client_macos_dir,
         &judge_dir,
         &judge_keys_dir,
+        &judge_usb_dir,
         &manifests_dir,
         &config_dir,
         &checksums_dir,
@@ -81,11 +116,9 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
         })?;
     }
 
-    // 1. Generate contest cryptographic keypairs
     let signing_keypair = ManifestSigningKeypair::generate();
     let judge_keypair = EvidenceEncryptionKeypair::generate();
 
-    // 2. Build policies
     let app_policy = if config.prohibited_apps.is_empty() {
         AppPolicy::default()
     } else {
@@ -107,7 +140,6 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
         enable_cpp_compiler: config.enable_cpp_compiler,
     };
 
-    // If C++ compiler is enabled, initialize toolchain directory structure
     if config.enable_cpp_compiler {
         let toolchain_dir = client_dir.join("toolchain");
         let _ = fs::create_dir_all(&toolchain_dir);
@@ -126,7 +158,7 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
         );
     }
 
-    let (account_config, judge_csv, judge_html) = if config.participation_mode
+    let (account_config, judge_csv, judge_html, judge_pdf) = if config.participation_mode
         == warm_core::ParticipationMode::GeneratedAccounts
         && config.account_count > 0
     {
@@ -138,6 +170,7 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
             &contest.id,
             &records,
         );
+        let pdf = crate::accounts::export_credentials_pdf(&contest.title, &contest.id, &records);
         (
             warm_core::AccountModeConfig {
                 mode: warm_core::ParticipationMode::GeneratedAccounts,
@@ -146,9 +179,10 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
             },
             Some(csv),
             Some(html),
+            Some(pdf),
         )
     } else {
-        (warm_core::AccountModeConfig::default(), None, None)
+        (warm_core::AccountModeConfig::default(), None, None, None)
     };
 
     if let Some(csv) = judge_csv {
@@ -157,9 +191,41 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
     if let Some(html) = judge_html {
         let _ = fs::write(judge_dir.join("credentials.html"), html);
     }
+    if let Some(pdf) = judge_pdf {
+        let _ = fs::write(judge_dir.join("credentials.pdf"), pdf);
+    }
+
+    let usb_token = ContestExportAuthToken {
+        contest_id: contest.id.clone(),
+        contest_uuid: contest.uuid,
+        purpose: "CONTEST_LOG_EXPORT_AUTHORIZATION".to_string(),
+        created_at: Utc::now(),
+        nonce: uuid::Uuid::new_v4().to_string(),
+    };
+    let signed_token = usb_token.sign(&signing_keypair)?;
+    let token_json = serde_json::to_string_pretty(&signed_token)
+        .map_err(|e| WarmError::Serialization(e.to_string()))?;
+    fs::write(judge_usb_dir.join("warm_export_auth.token"), token_json)
+        .map_err(|e| WarmError::Io(e.to_string()))?;
 
     let mut binary_checksums = BTreeMap::new();
-    binary_checksums.insert("windows-x86_64".to_string(), "PENDING_BUILD".to_string());
+    let mut copied_participant_client = None;
+
+    if let Some(src_bin) = locate_participant_binary() {
+        if let Ok(bin_bytes) = fs::read(&src_bin) {
+            let win_exe_target = client_win_dir.join("Warm-AntiCheat-Participant.exe");
+            let _ = fs::write(&win_exe_target, &bin_bytes);
+            let win_hash = sha256_digest(&bin_bytes);
+            binary_checksums.insert("windows-x86_64".to_string(), win_hash);
+            copied_participant_client = Some(win_exe_target);
+
+            let bat_content = "@echo off\r\nstart \"\" \"%~dp0Warm-AntiCheat-Participant.exe\"\r\n";
+            let _ = fs::write(client_win_dir.join("Run-Contest.bat"), bat_content);
+        }
+    } else {
+        binary_checksums.insert("windows-x86_64".to_string(), "PENDING_BUILD".to_string());
+    }
+
     binary_checksums.insert("linux-x86_64".to_string(), "PENDING_BUILD".to_string());
     binary_checksums.insert("macos-universal".to_string(), "PENDING_BUILD".to_string());
 
@@ -175,7 +241,6 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
 
     let signed_manifest = manifest.sign(&signing_keypair)?;
 
-    // 4. Write manifest files
     let manifest_bytes = signed_manifest.manifest.canonical_bytes()?;
     fs::write(manifests_dir.join("contest_manifest.json"), &manifest_bytes)
         .map_err(|e| WarmError::Io(e.to_string()))?;
@@ -185,18 +250,25 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
     )
     .map_err(|e| WarmError::Io(e.to_string()))?;
 
-    // 5. Write configuration files
+    let _ = fs::write(
+        client_win_dir.join("contest_manifest.json"),
+        &manifest_bytes,
+    );
+    let _ = fs::write(
+        client_win_dir.join("contest_manifest.json.sig"),
+        &signed_manifest.signature_hex,
+    );
+
     let config_json = serde_json::to_string_pretty(&contest)
         .map_err(|e| WarmError::Serialization(e.to_string()))?;
-    fs::write(config_dir.join("contest_config.json"), config_json)
+    fs::write(config_dir.join("contest_config.json"), &config_json)
         .map_err(|e| WarmError::Io(e.to_string()))?;
 
     let policies_json = serde_json::to_string_pretty(&monitoring_policy)
         .map_err(|e| WarmError::Serialization(e.to_string()))?;
-    fs::write(config_dir.join("policies.json"), policies_json)
+    fs::write(config_dir.join("policies.json"), &policies_json)
         .map_err(|e| WarmError::Io(e.to_string()))?;
 
-    // 6. Write Public keys to configuration/ (distributable with participant client)
     fs::write(
         config_dir.join("judge_evidence_key.pub"),
         judge_keypair.public_key_hex(),
@@ -208,7 +280,19 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
     )
     .map_err(|e| WarmError::Io(e.to_string()))?;
 
-    // 7. Write Private Keys to judge/keys/ ONLY (STRICT INVARIANT: NEVER PLACE IN CLIENT)
+    let client_win_cfg = client_win_dir.join("configuration");
+    let _ = fs::create_dir_all(&client_win_cfg);
+    let _ = fs::write(client_win_cfg.join("contest_config.json"), &config_json);
+    let _ = fs::write(client_win_cfg.join("policies.json"), &policies_json);
+    let _ = fs::write(
+        client_win_cfg.join("judge_evidence_key.pub"),
+        judge_keypair.public_key_hex(),
+    );
+    let _ = fs::write(
+        client_win_cfg.join("manifest_signing_key.pub"),
+        signing_keypair.public_key_hex(),
+    );
+
     let judge_priv_path = judge_keys_dir.join("judge_evidence_key.priv");
     fs::write(&judge_priv_path, judge_keypair.private_key_hex())
         .map_err(|e| WarmError::Io(e.to_string()))?;
@@ -217,7 +301,6 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
     fs::write(&signing_priv_path, signing_keypair.private_key_hex())
         .map_err(|e| WarmError::Io(e.to_string()))?;
 
-    // 8. Generate Verification Instructions
     let instructions = format!(
         r#"# Verification Instructions for {title}
 
@@ -233,6 +316,14 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
   - Fingerprint: `{signing_fp}`
 - **Judge Decryption Public Key:** `{judge_pk}`
   - Fingerprint: `{judge_fp}`
+
+---
+
+## Authorized USB Export
+
+To perform an authorized USB export, copy the file:
+`judge/usb_token/warm_export_auth.token`
+to the root of any USB drive. Inserting it into the participant's computer will automatically finalize and export the encrypted evidence log.
 
 ---
 
@@ -259,11 +350,14 @@ warm_judge_app verify-manifest \
 
     fs::write(
         contest_dir.join("VERIFICATION_INSTRUCTIONS.md"),
-        instructions,
+        &instructions,
     )
     .map_err(|e| WarmError::Io(e.to_string()))?;
+    let _ = fs::write(
+        client_win_dir.join("VERIFICATION_INSTRUCTIONS.md"),
+        &instructions,
+    );
 
-    // 9. Generate Checksums
     let checksum_content = format!(
         "{manifest_hash}  manifests/contest_manifest.json\n",
         manifest_hash = sha256_digest(&manifest_bytes),
@@ -278,27 +372,25 @@ warm_judge_app verify-manifest \
         judge_private_key_path: judge_priv_path,
         manifest_signing_key_priv_path: signing_priv_path,
         checksums_path,
+        participant_client_path: copied_participant_client,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Duration;
 
     #[test]
     fn test_generate_contest_distribution() {
         let temp_dir =
             std::env::temp_dir().join(format!("warm_dist_test_{}", uuid::Uuid::new_v4()));
-        let start = Utc::now();
-        let end = start + Duration::hours(4);
 
         let config = ContestBuildConfig {
             title: "GOCUP 1".to_string(),
             organizer: "National Committee".to_string(),
             description: "Test Contest".to_string(),
-            start_time: start,
-            end_time: end,
+            start_time: None,
+            end_time: None,
             prohibited_apps: vec!["ollama.exe".to_string(), "lmstudio.exe".to_string()],
             restricted_domains: vec!["chatgpt.com".to_string(), "claude.ai".to_string()],
             supported_platforms: vec!["windows".to_string(), "linux".to_string()],
@@ -313,7 +405,6 @@ mod tests {
         assert_eq!(bundle.contest_id, "gocup-1");
         assert!(bundle.root_dir.exists());
 
-        // Verify structure
         assert!(bundle
             .root_dir
             .join("manifests/contest_manifest.json")
@@ -339,19 +430,20 @@ mod tests {
         assert!(bundle.checksums_path.exists());
         assert!(bundle
             .root_dir
+            .join("judge/usb_token/warm_export_auth.token")
+            .exists());
+        assert!(bundle
+            .root_dir
             .join("VERIFICATION_INSTRUCTIONS.md")
             .exists());
 
-        // Ensure private key is NOT in client directory
         assert!(!bundle
             .root_dir
             .join("client/judge_evidence_key.priv")
             .exists());
 
-        // Verify signed manifest
         assert!(bundle.signed_manifest.verify().is_ok());
 
-        // Cleanup
         let _ = fs::remove_dir_all(temp_dir);
     }
 
@@ -359,15 +451,13 @@ mod tests {
     fn test_generate_contest_distribution_with_accounts() {
         let temp_dir =
             std::env::temp_dir().join(format!("warm_dist_acc_test_{}", uuid::Uuid::new_v4()));
-        let start = Utc::now();
-        let end = start + Duration::hours(3);
 
         let config = ContestBuildConfig {
             title: "GOCUP Mode B".to_string(),
             organizer: "National Committee".to_string(),
             description: "Accounts Test Contest".to_string(),
-            start_time: start,
-            end_time: end,
+            start_time: None,
+            end_time: None,
             prohibited_apps: vec![],
             restricted_domains: vec![],
             supported_platforms: vec!["windows".to_string()],
@@ -394,6 +484,11 @@ mod tests {
         let csv_content = fs::read_to_string(judge_csv).unwrap();
         assert!(csv_content.contains("GOCUP-MODE-B-001"));
         assert!(csv_content.contains("GOCUP-MODE-B-005"));
+
+        let judge_pdf = bundle.root_dir.join("judge/credentials.pdf");
+        assert!(judge_pdf.exists());
+        let pdf_bytes = fs::read(judge_pdf).unwrap();
+        assert!(pdf_bytes.starts_with(b"%PDF-1.4"));
 
         assert!(!bundle.root_dir.join("client/credentials.csv").exists());
         assert!(!bundle

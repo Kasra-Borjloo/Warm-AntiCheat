@@ -3,13 +3,14 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{Read, Write};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 use warm_crypto::sha256_digest;
 
-/// Parameters for running a compiled contest executable.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionRequest {
     pub binary_path: PathBuf,
@@ -31,7 +32,6 @@ impl Default for ExecutionRequest {
     }
 }
 
-/// Output data and forensic artifacts from program execution.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ExecutionResult {
     pub started: bool,
@@ -52,7 +52,6 @@ pub struct ExecutionResult {
 pub struct ExecutionRunner;
 
 impl ExecutionRunner {
-    /// Safely executes the compiled binary without shell interpolation and with strict timeout enforcement.
     pub fn execute(req: ExecutionRequest) -> Result<ExecutionResult> {
         let start_time = Utc::now();
         let timer = Instant::now();
@@ -67,14 +66,14 @@ impl ExecutionRunner {
         let bin_bytes = fs::read(&req.binary_path).map_err(CompilerError::Io)?;
         let executable_hash = sha256_digest(&bin_bytes);
 
-        // Spawn child process directly without shell
         let mut cmd = Command::new(&req.binary_path);
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(0x08000000);
         cmd.args(&req.args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        // Isolated runtime library path for bundled C++ runtime DLLs (libstdc++-6.dll, etc.)
         if let Some(ref bin_dir) = req.toolchain_bin_dir {
             #[cfg(target_os = "windows")]
             cmd.env(
@@ -107,7 +106,6 @@ impl ExecutionRunner {
             }
         };
 
-        // Write stdin if provided
         if let Some(ref input) = req.stdin_input {
             if let Some(mut stdin) = child.stdin.take() {
                 let _ = stdin.write_all(input.as_bytes());
@@ -136,7 +134,6 @@ impl ExecutionRunner {
             buf
         });
 
-        // Watchdog timeout loop
         let timeout_duration = Duration::from_millis(req.timeout_ms);
         let poll_interval = Duration::from_millis(25);
         let mut timed_out = false;

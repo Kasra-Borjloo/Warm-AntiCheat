@@ -1,9 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-/// Policy rules defining restricted domain targets during active competition sessions.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BrowserPolicy {
-    /// List of restricted domain hostnames.
     pub restricted_domains: Vec<String>,
 }
 
@@ -18,7 +16,6 @@ impl BrowserPolicy {
         Self { restricted_domains }
     }
 
-    /// Default baseline rules detecting popular AI chat and LLM interfaces.
     pub fn default_restricted_domains() -> Self {
         Self {
             restricted_domains: vec![
@@ -37,7 +34,6 @@ impl BrowserPolicy {
         }
     }
 
-    /// Check if target domain or URL violates restricted domain policy.
     pub fn is_restricted(&self, target: &str) -> bool {
         let domain = extract_clean_domain(target);
         if domain.is_empty() {
@@ -51,21 +47,17 @@ impl BrowserPolicy {
     }
 }
 
-/// Normalize URLs and target strings to bare lowercase domain names.
 pub fn extract_clean_domain(target: &str) -> String {
     let mut clean = target.trim().to_lowercase();
 
-    // Strip http:// or https:// prefix
     if let Some(pos) = clean.find("://") {
         clean = clean[pos + 3..].to_string();
     }
 
-    // Strip path and query parameters
     if let Some(pos) = clean.find('/') {
         clean = clean[..pos].to_string();
     }
 
-    // Strip port numbers
     if let Some(pos) = clean.find(':') {
         clean = clean[..pos].to_string();
     }

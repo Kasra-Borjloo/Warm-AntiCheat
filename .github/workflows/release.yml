@@ -18,22 +18,22 @@ jobs:
         include:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: warm-anticheat-windows-x86_64.zip
+            artifact_name: warm-contest-maker-windows-x86_64.zip
             platform: windows
             arch: x86_64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: warm-anticheat-linux-x86_64.tar.gz
+            artifact_name: warm-contest-maker-linux-x86_64.tar.gz
             platform: linux
             arch: x86_64
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact_name: warm-anticheat-macos-arm64.tar.gz
+            artifact_name: warm-contest-maker-macos-arm64.tar.gz
             platform: macos
             arch: aarch64
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact_name: warm-anticheat-macos-x86_64.tar.gz
+            artifact_name: warm-contest-maker-macos-x86_64.tar.gz
             platform: macos
             arch: x86_64
 
@@ -59,9 +59,7 @@ jobs:
         shell: pwsh
         run: |
           mkdir staging
-          Copy-Item target/${{ matrix.target }}/release/warm_builder_app.exe staging/
-          Copy-Item target/${{ matrix.target }}/release/warm_participant_app.exe staging/
-          Copy-Item target/${{ matrix.target }}/release/warm_judge_app.exe staging/
+          Copy-Item target/${{ matrix.target }}/release/warm_builder_app.exe staging/warm-contest-maker.exe
           Copy-Item README.md staging/
           Copy-Item LICENSE staging/
           Compress-Archive -Path staging/* -DestinationPath ${{ matrix.artifact_name }}
@@ -70,9 +68,8 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir staging
-          cp target/${{ matrix.target }}/release/warm_builder_app staging/
-          cp target/${{ matrix.target }}/release/warm_participant_app staging/
-          cp target/${{ matrix.target }}/release/warm_judge_app staging/
+          cp target/${{ matrix.target }}/release/warm_builder_app staging/warm-contest-maker
+          chmod +x staging/warm-contest-maker
           cp README.md staging/
           cp LICENSE staging/
           tar -czvf ${{ matrix.artifact_name }} -C staging .

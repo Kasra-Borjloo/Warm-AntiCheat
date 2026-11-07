@@ -1,8 +1,9 @@
-//! Warm-AntiCheat Contest Builder Application Entry Point
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use chrono::{DateTime, Duration, Utc};
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::env;
+use std::fs;
 use std::path::PathBuf;
 use warm_builder_core::{generate_contest_distribution, ContestBuildConfig};
 
@@ -11,8 +12,6 @@ pub struct BuildContestParams {
     pub title: String,
     pub organizer: String,
     pub description: Option<String>,
-    pub start_time: Option<String>,
-    pub end_time: Option<String>,
     pub prohibited_apps: Vec<String>,
     pub restricted_domains: Vec<String>,
     pub supported_platforms: Vec<String>,
@@ -26,12 +25,23 @@ pub struct BuildContestParams {
     pub account_count: Option<usize>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountItemView {
+    pub index: usize,
+    pub username: String,
+    pub password: String,
+    pub account_id: String,
+    pub contest_id: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountsPreviewResponse {
     pub success: bool,
     pub count: usize,
+    pub accounts: Vec<AccountItemView>,
     pub csv_content: String,
     pub html_content: String,
+    pub pdf_base64: String,
     pub error: Option<String>,
 }
 
@@ -43,6 +53,7 @@ pub struct BuildContestResponse {
     pub manifest_path: String,
     pub checksums_path: String,
     pub judge_private_key_path: String,
+    pub client_dir: String,
     pub error: Option<String>,
 }
 
@@ -52,27 +63,48 @@ fn get_builder_version() -> String {
 }
 
 #[tauri::command]
+fn pick_output_directory() -> Option<String> {
+    rfd::FileDialog::new()
+        .pick_folder()
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn save_credentials_file(
+    format: String,
+    default_name: String,
+    content: String,
+) -> Result<String, String> {
+    let mut dialog = rfd::FileDialog::new().set_file_name(&default_name);
+
+    if format.eq_ignore_ascii_case("pdf") {
+        dialog = dialog.add_filter("PDF Document (*.pdf)", &["pdf"]);
+    } else {
+        dialog = dialog.add_filter("CSV Spreadsheet (*.csv)", &["csv"]);
+    }
+
+    let target = match dialog.save_file() {
+        Some(p) => p,
+        None => return Err("Export cancelled by user".to_string()),
+    };
+
+    if format.eq_ignore_ascii_case("pdf") {
+        let pdf_bytes = base64::engine::general_purpose::STANDARD
+            .decode(&content)
+            .map_err(|e| format!("Base64 decoding error: {e}"))?;
+        fs::write(&target, pdf_bytes).map_err(|e| format!("Failed to write file: {e}"))?;
+    } else {
+        fs::write(&target, content.as_bytes()).map_err(|e| format!("Failed to write file: {e}"))?;
+    }
+
+    Ok(target.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 fn generate_contest(params: BuildContestParams) -> BuildContestResponse {
-    let start = params
-        .start_time
-        .and_then(|s| {
-            DateTime::parse_from_rfc3339(&s)
-                .ok()
-                .map(|d| d.with_timezone(&Utc))
-        })
-        .unwrap_or_else(Utc::now);
-
-    let end = params
-        .end_time
-        .and_then(|s| {
-            DateTime::parse_from_rfc3339(&s)
-                .ok()
-                .map(|d| d.with_timezone(&Utc))
-        })
-        .unwrap_or_else(|| start + Duration::hours(5));
-
     let out_dir = params
         .output_dir
+        .filter(|s| !s.trim().is_empty())
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("./dist"));
 
@@ -86,8 +118,8 @@ fn generate_contest(params: BuildContestParams) -> BuildContestResponse {
         title: params.title,
         organizer: params.organizer,
         description: params.description.unwrap_or_else(|| "Contest".to_string()),
-        start_time: start,
-        end_time: end,
+        start_time: None,
+        end_time: None,
         prohibited_apps: params.prohibited_apps,
         restricted_domains: params.restricted_domains,
         supported_platforms: params.supported_platforms,
@@ -99,19 +131,23 @@ fn generate_contest(params: BuildContestParams) -> BuildContestResponse {
     };
 
     match generate_contest_distribution(&config) {
-        Ok(bundle) => BuildContestResponse {
-            success: true,
-            contest_id: bundle.contest_id,
-            root_dir: bundle.root_dir.to_string_lossy().to_string(),
-            manifest_path: bundle
-                .root_dir
-                .join("manifests/contest_manifest.json")
-                .to_string_lossy()
-                .to_string(),
-            checksums_path: bundle.checksums_path.to_string_lossy().to_string(),
-            judge_private_key_path: bundle.judge_private_key_path.to_string_lossy().to_string(),
-            error: None,
-        },
+        Ok(bundle) => {
+            let client_dir = bundle.root_dir.join("client").to_string_lossy().to_string();
+            BuildContestResponse {
+                success: true,
+                contest_id: bundle.contest_id,
+                root_dir: bundle.root_dir.to_string_lossy().to_string(),
+                manifest_path: bundle
+                    .root_dir
+                    .join("manifests/contest_manifest.json")
+                    .to_string_lossy()
+                    .to_string(),
+                checksums_path: bundle.checksums_path.to_string_lossy().to_string(),
+                judge_private_key_path: bundle.judge_private_key_path.to_string_lossy().to_string(),
+                client_dir,
+                error: None,
+            }
+        }
         Err(e) => BuildContestResponse {
             success: false,
             contest_id: String::new(),
@@ -119,6 +155,7 @@ fn generate_contest(params: BuildContestParams) -> BuildContestResponse {
             manifest_path: String::new(),
             checksums_path: String::new(),
             judge_private_key_path: String::new(),
+            client_dir: String::new(),
             error: Some(e.to_string()),
         },
     }
@@ -132,6 +169,18 @@ fn generate_accounts_preview(
 ) -> AccountsPreviewResponse {
     match warm_builder_core::generate_participant_accounts(&contest_id, count) {
         Ok((records, _)) => {
+            let accounts_view: Vec<AccountItemView> = records
+                .iter()
+                .enumerate()
+                .map(|(i, r)| AccountItemView {
+                    index: i + 1,
+                    username: r.username.clone(),
+                    password: r.plaintext_password.clone(),
+                    account_id: r.account_id.to_string(),
+                    contest_id: r.contest_id.clone(),
+                })
+                .collect();
+
             let csv_content =
                 warm_builder_core::export_credentials_csv(&contest_title, &contest_id, &records);
             let html_content = warm_builder_core::export_credentials_printable_html(
@@ -139,19 +188,27 @@ fn generate_accounts_preview(
                 &contest_id,
                 &records,
             );
+            let pdf_bytes =
+                warm_builder_core::export_credentials_pdf(&contest_title, &contest_id, &records);
+            let pdf_base64 = base64::engine::general_purpose::STANDARD.encode(&pdf_bytes);
+
             AccountsPreviewResponse {
                 success: true,
                 count: records.len(),
+                accounts: accounts_view,
                 csv_content,
                 html_content,
+                pdf_base64,
                 error: None,
             }
         }
         Err(e) => AccountsPreviewResponse {
             success: false,
             count: 0,
+            accounts: Vec::new(),
             csv_content: String::new(),
             html_content: String::new(),
+            pdf_base64: String::new(),
             error: Some(e.to_string()),
         },
     }
@@ -176,15 +233,12 @@ fn run_cli(args: &[String]) {
     println!("    Organizer:   {}", organizer);
     println!("    Output Dir:  {}", out_dir.display());
 
-    let start = Utc::now();
-    let end = start + Duration::hours(5);
-
     let config = ContestBuildConfig {
         title,
         organizer,
         description: "Official Algorithmic Contest".to_string(),
-        start_time: start,
-        end_time: end,
+        start_time: None,
+        end_time: None,
         prohibited_apps: vec![
             "ollama".to_string(),
             "ollama.exe".to_string(),
@@ -222,6 +276,9 @@ fn run_cli(args: &[String]) {
                 bundle.judge_private_key_path.display()
             );
             println!("    Checksums:     {}", bundle.checksums_path.display());
+            if let Some(ref p) = bundle.participant_client_path {
+                println!("    Participant:   {}", p.display());
+            }
         }
         Err(e) => {
             eprintln!("\n[ERROR] Contest build failed: {e}");
@@ -241,12 +298,13 @@ fn main() {
         println!("  warm_builder_app build [TITLE] [ORGANIZER] [OUTPUT_DIR]");
         println!("  warm_builder_app [ui]");
     } else {
-        // Run Desktop GUI via Tauri
         tauri::Builder::default()
             .invoke_handler(tauri::generate_handler![
                 get_builder_version,
                 generate_contest,
-                generate_accounts_preview
+                generate_accounts_preview,
+                pick_output_directory,
+                save_credentials_file
             ])
             .run(tauri::generate_context!())
             .expect("Failed to run Warm-AntiCheat Contest Builder Desktop Application");

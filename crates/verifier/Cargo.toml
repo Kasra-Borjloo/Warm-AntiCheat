@@ -16,10 +16,13 @@ serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 chrono.workspace = true
+tar.workspace = true
+base64.workspace = true
 
 [dev-dependencies]
 warm_builder_core.workspace = true
 warm_compiler.workspace = true
+warm_platform.workspace = true
 warm_audit.workspace = true
 hex.workspace = true
 x25519-dalek.workspace = true

@@ -14,7 +14,6 @@ fn test_storage_and_hash_chain_integrity() {
     let judge_keypair = EvidenceEncryptionKeypair::generate();
     let mut tracker = HashChainTracker::new(contest_uuid, participant_id);
 
-    // Insert 5 events sequentially
     for i in 1..=5 {
         let payload = format!("{{\"action\":\"step_{i}\"}}").into_bytes();
         let payload_hash = sha256_digest(&payload);
@@ -49,7 +48,6 @@ fn test_storage_and_hash_chain_integrity() {
 
     assert_eq!(store.get_event_count().unwrap(), 5);
 
-    // Verify integrity passes
     let report = store
         .verify_integrity(&contest_uuid, participant_id)
         .expect("Verification should succeed");
@@ -69,7 +67,6 @@ fn test_storage_crash_recovery_and_resume() {
     let session_id = Uuid::new_v4();
     let judge_keypair = EvidenceEncryptionKeypair::generate();
 
-    // 1. Initial run: record 3 events
     {
         let store = SqliteAuditStore::open(&temp_db).expect("Should open DB");
         let mut tracker = HashChainTracker::new(contest_uuid, participant_id);
@@ -107,7 +104,6 @@ fn test_storage_crash_recovery_and_resume() {
         }
     }
 
-    // 2. Restart app: reopen DB and resume state
     {
         let store = SqliteAuditStore::open(&temp_db).expect("Should reopen DB");
         assert_eq!(store.get_event_count().unwrap(), 3);
@@ -121,7 +117,6 @@ fn test_storage_crash_recovery_and_resume() {
         let mut tracker =
             HashChainTracker::resume(contest_uuid, participant_id, last_seq, last_hash);
 
-        // Record 2 more events
         for i in 4..=5 {
             let payload = format!("{{\"run\":2,\"step\":{i}}}").into_bytes();
             let payload_hash = sha256_digest(&payload);
@@ -151,7 +146,6 @@ fn test_storage_crash_recovery_and_resume() {
                 .unwrap();
         }
 
-        // Full 5 events verification across sessions
         let report = store
             .verify_integrity(&contest_uuid, participant_id)
             .unwrap();
@@ -162,6 +156,5 @@ fn test_storage_crash_recovery_and_resume() {
         assert!(report.anomalies.is_empty());
     }
 
-    // Cleanup
     let _ = std::fs::remove_file(temp_db);
 }

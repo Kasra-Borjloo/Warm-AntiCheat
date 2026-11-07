@@ -1,14 +1,12 @@
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-/// Return lowercase hex-encoded SHA-256 digest of arbitrary input data.
 pub fn sha256_digest(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
     hex::encode(hasher.finalize())
 }
 
-/// Return raw 32-byte SHA-256 hash array.
 pub fn sha256_bytes(data: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(data);
@@ -18,9 +16,6 @@ pub fn sha256_bytes(data: &[u8]) -> [u8; 32] {
     out
 }
 
-/// Compute the unique genesis hash (Sequence 0 initial state) for a participant's audit stream.
-///
-/// $$\text{Hash}_0 = \text{SHA-256}(\text{"WARM-GENESIS-CHAIN"} \parallel \text{ContestUUID} \parallel \text{ParticipantID})$$
 pub fn compute_genesis_hash(contest_uuid: &Uuid, participant_id: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(b"WARM-GENESIS-CHAIN:");
@@ -30,9 +25,6 @@ pub fn compute_genesis_hash(contest_uuid: &Uuid, participant_id: &str) -> String
     hex::encode(hasher.finalize())
 }
 
-/// Compute the cryptographic hash for an audit event in the hash chain:
-///
-/// $$\text{Hash}_i = \text{SHA-256}(\text{Seq}_i \parallel \text{Timestamp} \parallel \text{Hash}_{i-1} \parallel \text{Category} \parallel \text{PayloadHash})$$
 pub fn compute_event_hash(
     seq: u64,
     timestamp_rfc3339: &str,
@@ -53,7 +45,6 @@ pub fn compute_event_hash(
     hex::encode(hasher.finalize())
 }
 
-/// Validate whether an event's hash accurately reflects its inputs and parent link.
 pub fn verify_event_hash(
     expected_hash: &str,
     seq: u64,
@@ -98,7 +89,6 @@ mod tests {
             &p1_hash
         ));
 
-        // Modified previous hash breaks verification
         assert!(!verify_event_hash(
             &h1,
             1,

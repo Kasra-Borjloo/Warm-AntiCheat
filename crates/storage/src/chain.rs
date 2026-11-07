@@ -2,7 +2,6 @@ use uuid::Uuid;
 use warm_crypto::{compute_event_hash, compute_genesis_hash};
 use warm_events::EventCategory;
 
-/// Manages the in-memory state of the sequential tamper-evident hash chain.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HashChainTracker {
     pub contest_uuid: Uuid,
@@ -12,7 +11,6 @@ pub struct HashChainTracker {
 }
 
 impl HashChainTracker {
-    /// Initialize a brand new hash chain at Genesis (Sequence 0).
     pub fn new(contest_uuid: Uuid, participant_id: impl Into<String>) -> Self {
         let participant_id = participant_id.into();
         let genesis_hash = compute_genesis_hash(&contest_uuid, &participant_id);
@@ -24,7 +22,6 @@ impl HashChainTracker {
         }
     }
 
-    /// Resume tracker state from existing storage after app restart or recovery.
     pub fn resume(
         contest_uuid: Uuid,
         participant_id: impl Into<String>,
@@ -39,8 +36,6 @@ impl HashChainTracker {
         }
     }
 
-    /// Advance the chain by computing the next link and updating internal state.
-    /// Returns `(next_sequence, previous_hash, new_hash)`.
     pub fn step(
         &mut self,
         timestamp_rfc3339: &str,

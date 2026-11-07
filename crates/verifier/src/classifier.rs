@@ -1,5 +1,7 @@
+use base64::Engine;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 use uuid::Uuid;
 use warm_core::Result;
 use warm_crypto::{open_asymmetric_payload, EvidenceEncryptionKeypair};
@@ -7,14 +9,10 @@ use warm_events::{BrowserEventPayload, ProcessEventPayload};
 use warm_policies::MonitoringPolicy;
 use warm_storage::SqliteAuditStore;
 
-/// High-level competition integrity classification.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VerdictClassification {
-    /// No prohibited activity or tampering observed in the verified evidence.
     Safe,
-    /// Verifiable, un-tampered evidence of prohibited activity was recorded.
     Unsafe,
-    /// Incomplete, broken, interrupted, or anomalous evidence requiring human jury investigation.
     ReviewRequired,
 }
 
@@ -54,6 +52,17 @@ pub struct DecryptedTimelineEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ScreenshotEvidence {
+    pub attachment_id: Uuid,
+    pub filename: String,
+    pub mime_type: String,
+    pub triggering_sequence: u64,
+    pub timestamp_rfc3339: String,
+    pub reason: String,
+    pub data_base64: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ForensicReport {
     pub contest_uuid: Uuid,
     pub participant_id: String,
@@ -71,6 +80,8 @@ pub struct ForensicReport {
     pub declared_log_name: Option<String>,
     #[serde(default)]
     pub participation_mode: warm_core::ParticipationMode,
+    #[serde(default)]
+    pub screenshots: Vec<ScreenshotEvidence>,
 }
 
 pub struct ForensicVerifier {
@@ -86,22 +97,180 @@ impl ForensicVerifier {
         }
     }
 
-    /// Execute complete forensic audit on a stored participant audit database.
     pub fn audit_store(
         &self,
         store: &SqliteAuditStore,
         expected_contest_uuid: &Uuid,
         expected_participant_id: &str,
     ) -> Result<ForensicReport> {
-        // 1. Verify cryptographic hash chain integrity
         let integrity = store.verify_integrity(expected_contest_uuid, expected_participant_id)?;
+        let raw_events = store.get_all_events()?;
+        let session_id = raw_events
+            .first()
+            .map(|e| e.session_id)
+            .unwrap_or_else(Uuid::new_v4);
 
+        self.evaluate_events(
+            expected_contest_uuid,
+            expected_participant_id,
+            session_id,
+            &raw_events,
+            integrity.is_valid,
+            &integrity.anomalies,
+            None,
+        )
+    }
+
+    pub fn audit_warmac_archive(&self, warmac_path: &Path) -> Result<ForensicReport> {
+        let archive =
+            warm_storage::verify_warmac_file(warmac_path, &self.judge_keypair.secret_key)?;
+
+        let events_path = format!("sessions/{}/events.jsonl", archive.session_id);
+        let events_bytes = archive.files.get(&events_path).ok_or_else(|| {
+            warm_core::WarmError::Verification(format!("Missing {events_path} in archive"))
+        })?;
+
+        let events_str = String::from_utf8(events_bytes.clone())
+            .map_err(|e| warm_core::WarmError::Verification(e.to_string()))?;
+
+        let mut raw_events = Vec::new();
+        for line in events_str.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let v: serde_json::Value = serde_json::from_str(line)
+                .map_err(|e| warm_core::WarmError::Verification(e.to_string()))?;
+
+            let seq = v["sequence_number"].as_u64().unwrap_or(0);
+            let event_uuid =
+                Uuid::parse_str(v["event_uuid"].as_str().unwrap_or("")).unwrap_or_default();
+            let contest_uuid =
+                Uuid::parse_str(v["contest_uuid"].as_str().unwrap_or("")).unwrap_or_default();
+            let participant_id = v["participant_id"].as_str().unwrap_or("").to_string();
+            let session_id =
+                Uuid::parse_str(v["session_id"].as_str().unwrap_or("")).unwrap_or_default();
+            let timestamp_rfc3339 = v["timestamp"].as_str().unwrap_or("").to_string();
+            let category = v["category"].as_str().unwrap_or("").to_string();
+            let payload_hash = v["payload_hash"].as_str().unwrap_or("").to_string();
+            let previous_event_hash = v["previous_event_hash"].as_str().unwrap_or("").to_string();
+            let current_event_hash = v["current_event_hash"].as_str().unwrap_or("").to_string();
+
+            let sealed_val = &v["sealed_payload"];
+            let ephemeral_public_key_hex = sealed_val["ephemeral_public_key_hex"]
+                .as_str()
+                .unwrap_or("")
+                .to_string();
+            let nonce_hex = sealed_val["nonce_hex"].as_str().unwrap_or("").to_string();
+            let ciphertext_hex = sealed_val["ciphertext_hex"]
+                .as_str()
+                .unwrap_or("")
+                .to_string();
+
+            raw_events.push(warm_storage::StoredAuditEvent {
+                sequence_number: seq,
+                event_uuid,
+                contest_uuid,
+                participant_id,
+                session_id,
+                timestamp_rfc3339,
+                category,
+                sealed_payload: warm_crypto::SealedPayload {
+                    ephemeral_public_key_hex,
+                    nonce_hex,
+                    ciphertext_hex,
+                },
+                payload_hash,
+                previous_event_hash,
+                current_event_hash,
+            });
+        }
+
+        let genesis_hash =
+            warm_crypto::compute_genesis_hash(&archive.contest_uuid, &archive.participant_id);
+        let mut prev_h = genesis_hash;
+        let mut anomalies = Vec::new();
+
+        for (expected_seq, (idx, ev)) in (1u64..).zip(raw_events.iter().enumerate()) {
+            if ev.sequence_number != expected_seq {
+                anomalies.push(format!(
+                    "Sequence gap at index {idx}: expected {expected_seq}, found {}",
+                    ev.sequence_number
+                ));
+            }
+            if ev.previous_event_hash != prev_h {
+                anomalies.push(format!(
+                    "Previous hash mismatch at sequence {}: expected {prev_h}, found {}",
+                    ev.sequence_number, ev.previous_event_hash
+                ));
+            }
+            let computed = warm_crypto::compute_event_hash(
+                ev.sequence_number,
+                &ev.timestamp_rfc3339,
+                &ev.previous_event_hash,
+                &ev.category,
+                &ev.payload_hash,
+            );
+            if computed != ev.current_event_hash {
+                anomalies.push(format!(
+                    "Current hash verification failed at sequence {}",
+                    ev.sequence_number
+                ));
+            }
+            prev_h = ev.current_event_hash.clone();
+        }
+
+        let mut report = self.evaluate_events(
+            &archive.contest_uuid,
+            &archive.participant_id,
+            archive.session_id,
+            &raw_events,
+            anomalies.is_empty(),
+            &anomalies,
+            archive.metadata.authenticated_account_id,
+        )?;
+
+        for (rel_path, content) in &archive.files {
+            if rel_path.starts_with(&format!("sessions/{}/screenshots/", archive.session_id)) {
+                let filename = rel_path
+                    .split('/')
+                    .next_back()
+                    .unwrap_or("screenshot.bmp")
+                    .to_string();
+                let b64 = base64::engine::general_purpose::STANDARD.encode(content);
+                report.screenshots.push(ScreenshotEvidence {
+                    attachment_id: Uuid::new_v4(),
+                    filename,
+                    mime_type: "image/bmp".to_string(),
+                    triggering_sequence: 0,
+                    timestamp_rfc3339: archive.metadata.exported_at.to_rfc3339(),
+                    reason:
+                        "Event-triggered screenshot evidence captured during suspicious activity"
+                            .to_string(),
+                    data_base64: b64,
+                });
+            }
+        }
+
+        Ok(report)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn evaluate_events(
+        &self,
+        contest_uuid: &Uuid,
+        participant_id: &str,
+        session_id: Uuid,
+        raw_events: &[warm_storage::StoredAuditEvent],
+        is_integrity_valid: bool,
+        integrity_anomalies: &[String],
+        account_id_override: Option<Uuid>,
+    ) -> Result<ForensicReport> {
         let mut findings = Vec::new();
         let mut classification = VerdictClassification::Safe;
 
-        if !integrity.is_valid {
+        if !is_integrity_valid {
             classification = VerdictClassification::ReviewRequired;
-            for anomaly in &integrity.anomalies {
+            for anomaly in integrity_anomalies {
                 findings.push(ForensicFinding {
                     severity: FindingSeverity::Critical,
                     title: "Hash Chain Anomaly".to_string(),
@@ -112,19 +281,12 @@ impl ForensicVerifier {
             }
         }
 
-        // 2. Fetch all stored events
-        let raw_events = store.get_all_events()?;
         let mut timeline = Vec::new();
-        let session_id = raw_events
-            .first()
-            .map(|e| e.session_id)
-            .unwrap_or_else(Uuid::new_v4);
-
         let mut last_heartbeat_time: Option<DateTime<Utc>> = None;
         let mut authenticated_account_id: Option<Uuid> = None;
         let mut failed_auth_count = 0;
 
-        for event in &raw_events {
+        for event in raw_events {
             let aad = format!(
                 "{}:{}:{}",
                 event.contest_uuid, event.participant_id, event.sequence_number
@@ -158,8 +320,6 @@ impl ForensicVerifier {
                 }
             };
 
-            // Policy Rule Evaluations:
-            // A. Check for Prohibited Application
             if event.category == "Process" {
                 if let Ok(proc_payload) =
                     serde_json::from_value::<ProcessEventPayload>(payload_value.clone())
@@ -177,10 +337,27 @@ impl ForensicVerifier {
                             timestamps: vec![event.timestamp_rfc3339.clone()],
                         });
                     }
+
+                    if let Some(ref cmdline) = proc_payload.cmdline {
+                        if let Some((rule_name, detail)) =
+                            warm_policies::AppPolicy::inspect_command_line(cmdline)
+                        {
+                            classification = VerdictClassification::Unsafe;
+                            findings.push(ForensicFinding {
+                                severity: FindingSeverity::Critical,
+                                title: format!("Local AI Inference Runtime Detected ({rule_name})"),
+                                description: format!(
+                                    "Process '{}' (PID: {}) executed local AI inference: {detail}. Command line: {cmdline}",
+                                    proc_payload.name, proc_payload.pid
+                                ),
+                                supporting_sequences: vec![event.sequence_number],
+                                timestamps: vec![event.timestamp_rfc3339.clone()],
+                            });
+                        }
+                    }
                 }
             }
 
-            // B. Check for Restricted Domain Access
             if event.category == "Browser" {
                 if let Ok(browser_payload) =
                     serde_json::from_value::<BrowserEventPayload>(payload_value.clone())
@@ -205,7 +382,6 @@ impl ForensicVerifier {
                 }
             }
 
-            // C. Check for Compiler Activity & Resource Violations
             if event.category == "Compiler" {
                 if let Ok(compiler_payload) = serde_json::from_value::<
                     warm_events::CompilerEventPayload,
@@ -242,7 +418,6 @@ impl ForensicVerifier {
                 }
             }
 
-            // D. Check for Monitoring Gaps & Sleep Interruptions
             if let Ok(dt) = DateTime::parse_from_rfc3339(&event.timestamp_rfc3339) {
                 let dt_utc = dt.with_timezone(&Utc);
                 if let Some(prev_time) = last_heartbeat_time {
@@ -312,20 +487,30 @@ impl ForensicVerifier {
             }
         };
 
+        let final_account_id = account_id_override.or(authenticated_account_id);
         Ok(ForensicReport {
-            contest_uuid: *expected_contest_uuid,
-            participant_id: expected_participant_id.to_string(),
+            contest_uuid: *contest_uuid,
+            participant_id: participant_id.to_string(),
             session_id,
             classification,
             summary,
             total_events: raw_events.len() as u64,
-            hash_chain_verified: integrity.is_valid,
+            hash_chain_verified: is_integrity_valid,
             findings,
             timeline,
             judge_notes: None,
-            authenticated_account_id,
-            declared_log_name: None,
-            participation_mode: warm_core::ParticipationMode::NoAccounts,
+            authenticated_account_id: final_account_id,
+            declared_log_name: if final_account_id.is_none() {
+                Some(participant_id.to_string())
+            } else {
+                None
+            },
+            participation_mode: if final_account_id.is_some() {
+                warm_core::ParticipationMode::GeneratedAccounts
+            } else {
+                warm_core::ParticipationMode::NoAccounts
+            },
+            screenshots: Vec::new(),
         })
     }
 }
@@ -397,13 +582,14 @@ mod tests {
 
         let mut tracker = warm_storage::HashChainTracker::new(contest_uuid, participant_id);
 
-        // Record a prohibited Ollama execution event
         let proc_payload = ProcessEventPayload {
             pid: 1234,
             name: "ollama.exe".to_string(),
             path: Some("C:\\bin\\ollama.exe".to_string()),
             cmdline: Some("ollama run llama3".to_string()),
             action: ProcessAction::Started,
+            screenshot_attachment: None,
+            listening_ports: vec![11434],
         };
         let payload_json = serde_json::to_vec(&proc_payload).unwrap();
         let payload_hash = sha256_digest(&payload_json);
@@ -465,6 +651,7 @@ mod tests {
             authenticated_account_id: Some(account_id),
             declared_log_name: None,
             participation_mode: warm_core::ParticipationMode::GeneratedAccounts,
+            screenshots: Vec::new(),
         };
 
         let report2 = ForensicReport {
@@ -481,6 +668,7 @@ mod tests {
             authenticated_account_id: Some(account_id),
             declared_log_name: None,
             participation_mode: warm_core::ParticipationMode::GeneratedAccounts,
+            screenshots: Vec::new(),
         };
 
         let duplicate_findings = detect_duplicate_account_sessions(&[report1, report2]);
@@ -489,5 +677,102 @@ mod tests {
         assert!(duplicate_findings[0]
             .title
             .contains("Duplicate Account ID Detected"));
+    }
+
+    #[test]
+    fn test_python_ai_inference_detection_vs_clean_script() {
+        use warm_crypto::{seal_asymmetric_payload, sha256_digest};
+        use warm_events::{EventCategory, ProcessAction};
+
+        let store = SqliteAuditStore::open_in_memory().unwrap();
+
+        let contest_uuid = Uuid::new_v4();
+        let participant_id = "participant-ai-test";
+        let session_id = Uuid::new_v4();
+        let mut tracker = warm_storage::HashChainTracker::new(contest_uuid, participant_id);
+
+        let judge_keypair = EvidenceEncryptionKeypair::generate();
+        let policy = MonitoringPolicy::default();
+
+        let clean_proc = ProcessEventPayload {
+            pid: 2001,
+            name: "python.exe".to_string(),
+            path: Some("C:\\Python311\\python.exe".to_string()),
+            cmdline: Some("python solution.py".to_string()),
+            action: ProcessAction::Started,
+            screenshot_attachment: None,
+            listening_ports: Vec::new(),
+        };
+        let clean_json = serde_json::to_vec(&clean_proc).unwrap();
+        let clean_hash = sha256_digest(&clean_json);
+        let now = Utc::now();
+        let (seq1, prev_hash1, curr_hash1) =
+            tracker.step(&now.to_rfc3339(), EventCategory::Process, &clean_hash);
+        let aad1 = format!("{}:{}:{}", contest_uuid, participant_id, seq1).into_bytes();
+        let sealed1 =
+            seal_asymmetric_payload(&judge_keypair.public_key, &contest_uuid, &clean_json, &aad1)
+                .unwrap();
+        store
+            .record_event(
+                seq1,
+                Uuid::new_v4(),
+                contest_uuid,
+                participant_id,
+                session_id,
+                now,
+                EventCategory::Process,
+                &sealed1,
+                &clean_hash,
+                &prev_hash1,
+                &curr_hash1,
+            )
+            .unwrap();
+
+        let verifier = ForensicVerifier::new(policy.clone(), judge_keypair.clone());
+        let report_clean = verifier
+            .audit_store(&store, &contest_uuid, participant_id)
+            .unwrap();
+        assert_eq!(report_clean.classification, VerdictClassification::Safe);
+        assert!(report_clean.findings.is_empty());
+
+        let ai_proc = ProcessEventPayload {
+            pid: 2002,
+            name: "python.exe".to_string(),
+            path: Some("C:\\Python311\\python.exe".to_string()),
+            cmdline: Some("python -m llama_cpp.server --model mistral.gguf".to_string()),
+            action: ProcessAction::Started,
+            screenshot_attachment: None,
+            listening_ports: vec![8000],
+        };
+        let ai_json = serde_json::to_vec(&ai_proc).unwrap();
+        let ai_hash = sha256_digest(&ai_json);
+        let (seq2, prev_hash2, curr_hash2) =
+            tracker.step(&now.to_rfc3339(), EventCategory::Process, &ai_hash);
+        let aad2 = format!("{}:{}:{}", contest_uuid, participant_id, seq2).into_bytes();
+        let sealed2 =
+            seal_asymmetric_payload(&judge_keypair.public_key, &contest_uuid, &ai_json, &aad2)
+                .unwrap();
+        store
+            .record_event(
+                seq2,
+                Uuid::new_v4(),
+                contest_uuid,
+                participant_id,
+                session_id,
+                now,
+                EventCategory::Process,
+                &sealed2,
+                &ai_hash,
+                &prev_hash2,
+                &curr_hash2,
+            )
+            .unwrap();
+
+        let report_ai = verifier
+            .audit_store(&store, &contest_uuid, participant_id)
+            .unwrap();
+        assert_eq!(report_ai.classification, VerdictClassification::Unsafe);
+        assert_eq!(report_ai.findings.len(), 1);
+        assert!(report_ai.findings[0].title.contains("Local AI Inference"));
     }
 }

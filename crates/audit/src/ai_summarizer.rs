@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use warm_verifier::{FindingSeverity, ForensicReport, VerdictClassification};
 
-/// Structured AI-assisted forensic executive summary.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AiExecutiveSummary {
     pub verdict: String,
@@ -14,13 +13,11 @@ pub struct AiExecutiveSummary {
 pub struct LocalAiSummarizer;
 
 impl LocalAiSummarizer {
-    /// Generate an offline advisory summary distinguishing verifiable facts from contextual inferences.
     pub fn summarize(report: &ForensicReport) -> AiExecutiveSummary {
         let mut facts = Vec::new();
         let mut inferences = Vec::new();
         let mut recommendations = Vec::new();
 
-        // 1. Facts directly extracted from verifiable cryptographic evidence
         facts.push(format!(
             "Total audit events verified in SHA-256 hash chain: {}",
             report.total_events
@@ -64,7 +61,6 @@ impl LocalAiSummarizer {
             );
         }
 
-        // 2. Contextual Inferences
         match report.classification {
             VerdictClassification::Safe => {
                 inferences.push(
@@ -132,6 +128,7 @@ mod tests {
             authenticated_account_id: None,
             declared_log_name: None,
             participation_mode: warm_core::ParticipationMode::NoAccounts,
+            screenshots: Vec::new(),
         };
 
         let summary = LocalAiSummarizer::summarize(&report);

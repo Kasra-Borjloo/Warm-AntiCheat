@@ -39,7 +39,6 @@ impl EnrollmentToken {
         })
     }
 
-    /// Canonical message bytes used for Ed25519 digital signature signing/verification.
     pub fn signing_bytes(&self) -> Vec<u8> {
         format!("{}:{}:{}", self.contest_id, self.participant_id, self.token).into_bytes()
     }

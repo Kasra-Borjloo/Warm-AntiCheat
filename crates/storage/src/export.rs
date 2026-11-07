@@ -6,7 +6,6 @@ use uuid::Uuid;
 use warm_core::{Result, WarmError};
 use warm_crypto::sha256_digest;
 
-/// Metadata manifest accompanying exported evidence packages.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EvidenceExportManifest {
     pub contest_uuid: Uuid,
@@ -19,7 +18,6 @@ pub struct EvidenceExportManifest {
     pub database_sha256: String,
 }
 
-/// Package an SQLite database file and metadata manifest into a destination directory.
 #[allow(clippy::too_many_arguments)]
 pub fn export_evidence_package(
     db_source_path: &Path,
@@ -70,7 +68,6 @@ pub fn export_evidence_package(
     Ok(destination_dir.to_path_buf())
 }
 
-/// Verify an exported evidence package's database integrity against its manifest.
 pub fn verify_export_package(package_dir: &Path) -> Result<EvidenceExportManifest> {
     let manifest_path = package_dir.join("manifest.json");
     if !manifest_path.exists() {
@@ -140,11 +137,9 @@ mod tests {
         assert_eq!(verified.participant_id, "contestant-1");
         assert_eq!(verified.total_events, 42);
 
-        // Tamper with database file
         fs::write(export_dir.join("evidence.sqlite"), b"TAMPERED_CONTENT").unwrap();
         assert!(verify_export_package(&export_dir).is_err());
 
-        // Cleanup
         let _ = fs::remove_dir_all(temp_dir);
     }
 }

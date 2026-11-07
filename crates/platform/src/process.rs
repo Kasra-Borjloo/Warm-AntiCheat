@@ -3,7 +3,6 @@ use sysinfo::{ProcessesToUpdate, System};
 use warm_events::{ProcessAction, ProcessEventPayload};
 use warm_policies::AppPolicy;
 
-/// Information about an observed OS process.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObservedProcess {
     pub pid: u32,
@@ -13,7 +12,6 @@ pub struct ObservedProcess {
     pub is_prohibited: bool,
 }
 
-/// Cross-platform process event collector and policy matcher.
 pub struct ProcessCollector {
     system: System,
     policy: AppPolicy,
@@ -60,7 +58,6 @@ impl ProcessCollector {
         }
     }
 
-    /// Scan system processes and return newly started or terminated process events.
     pub fn poll_events(&mut self) -> Vec<(ProcessAction, ProcessEventPayload, bool)> {
         self.system.refresh_processes(ProcessesToUpdate::All, true);
         let mut events = Vec::new();
@@ -87,7 +84,6 @@ impl ProcessCollector {
             })
             .collect();
 
-        // 1. Check for newly spawned processes
         for (&pid, (name, path, cmdline)) in &current_pids {
             if !self.known_pids.contains_key(&pid) {
                 let is_prohibited = self.policy.is_prohibited(name);
@@ -97,6 +93,8 @@ impl ProcessCollector {
                     path: path.clone(),
                     cmdline: cmdline.clone(),
                     action: ProcessAction::Started,
+                    screenshot_attachment: None,
+                    listening_ports: Vec::new(),
                 };
 
                 self.known_pids.insert(
@@ -114,7 +112,6 @@ impl ProcessCollector {
             }
         }
 
-        // 2. Check for terminated processes
         let dead_pids: Vec<u32> = self
             .known_pids
             .keys()
@@ -130,6 +127,8 @@ impl ProcessCollector {
                     path: proc.path,
                     cmdline: proc.cmdline,
                     action: ProcessAction::Terminated,
+                    screenshot_attachment: None,
+                    listening_ports: Vec::new(),
                 };
                 events.push((ProcessAction::Terminated, payload, proc.is_prohibited));
             }
@@ -138,7 +137,6 @@ impl ProcessCollector {
         events
     }
 
-    /// Simulate process launch for deterministic tests.
     pub fn simulate_process_launch(
         &mut self,
         name: &str,
@@ -151,12 +149,13 @@ impl ProcessCollector {
             path: Some(format!("/usr/bin/{name}")),
             cmdline: Some(format!("{name} --server")),
             action: ProcessAction::Started,
+            screenshot_attachment: None,
+            listening_ports: Vec::new(),
         };
         self.simulated_processes.insert(name.to_string());
         (ProcessAction::Started, payload, is_prohibited)
     }
 
-    /// Return all currently prohibited processes detected on the machine.
     pub fn find_active_prohibited_processes(&self) -> Vec<ObservedProcess> {
         self.known_pids
             .values()
@@ -175,13 +174,11 @@ mod tests {
         let policy = AppPolicy::default();
         let mut collector = ProcessCollector::new(policy);
 
-        // Simulate benign process launch
         let (action, payload, prohibited) = collector.simulate_process_launch("rustc.exe", 9999);
         assert_eq!(action, ProcessAction::Started);
         assert_eq!(payload.name, "rustc.exe");
         assert!(!prohibited);
 
-        // Simulate prohibited AI runtime launch
         let (action_ai, payload_ai, prohibited_ai) =
             collector.simulate_process_launch("ollama.exe", 10001);
         assert_eq!(action_ai, ProcessAction::Started);

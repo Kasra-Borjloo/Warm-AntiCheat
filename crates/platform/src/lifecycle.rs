@@ -16,7 +16,6 @@ impl LifecycleTracker {
         }
     }
 
-    /// Emits application startup event payload.
     pub fn on_application_launch() -> LifecycleEventPayload {
         LifecycleEventPayload {
             event_type: LifecycleEventType::ApplicationLaunch,
@@ -27,7 +26,20 @@ impl LifecycleTracker {
         }
     }
 
-    /// Emits clean application exit payload.
+    pub fn on_session_start() -> LifecycleEventPayload {
+        LifecycleEventPayload {
+            event_type: LifecycleEventType::SessionStart,
+            details: Some("Contest monitoring session started".to_string()),
+        }
+    }
+
+    pub fn on_session_end() -> LifecycleEventPayload {
+        LifecycleEventPayload {
+            event_type: LifecycleEventType::SessionEnd,
+            details: Some("Contest monitoring session cleanly concluded".to_string()),
+        }
+    }
+
     pub fn on_application_exit() -> LifecycleEventPayload {
         LifecycleEventPayload {
             event_type: LifecycleEventType::ApplicationExit,
@@ -35,14 +47,25 @@ impl LifecycleTracker {
         }
     }
 
-    /// Perform a heartbeat tick check. If wall-clock elapsed time significantly exceeds interval,
-    /// emits sleep / interruption event, otherwise emits standard heartbeat.
+    pub fn on_monitoring_interrupted(reason: &str) -> LifecycleEventPayload {
+        LifecycleEventPayload {
+            event_type: LifecycleEventType::MonitoringInterrupted,
+            details: Some(reason.to_string()),
+        }
+    }
+
+    pub fn on_monitoring_recovered(details: &str) -> LifecycleEventPayload {
+        LifecycleEventPayload {
+            event_type: LifecycleEventType::MonitoringRecovered,
+            details: Some(details.to_string()),
+        }
+    }
+
     pub fn tick(&mut self, current_time: DateTime<Utc>) -> Vec<LifecycleEventPayload> {
         let mut events = Vec::new();
         let elapsed_secs = (current_time - self.last_heartbeat).num_seconds();
 
         if elapsed_secs < 0 {
-            // Negative time jump: clock tampering or rollback
             events.push(LifecycleEventPayload {
                 event_type: LifecycleEventType::MonitoringInterrupted,
                 details: Some(format!(
@@ -51,7 +74,6 @@ impl LifecycleTracker {
                 )),
             });
         } else if elapsed_secs as u64 > self.max_gap_secs {
-            // Significant gap detected: device slept, froze, or monitoring process was suspended
             events.push(LifecycleEventPayload {
                 event_type: LifecycleEventType::SleepDetected,
                 details: Some(format!(
@@ -93,7 +115,6 @@ mod tests {
     #[test]
     fn test_lifecycle_sleep_detection() {
         let mut tracker = LifecycleTracker::new(15, 60);
-        // Advance time by 300 seconds (5 minutes gap = sleep)
         let t_wake = tracker.last_heartbeat + Duration::seconds(300);
         let events = tracker.tick(t_wake);
 
@@ -106,7 +127,6 @@ mod tests {
     #[test]
     fn test_lifecycle_clock_rollback() {
         let mut tracker = LifecycleTracker::new(15, 60);
-        // Roll time backwards by 60 seconds
         let t_rollback = tracker.last_heartbeat - Duration::seconds(60);
         let events = tracker.tick(t_rollback);
 

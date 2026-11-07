@@ -1,16 +1,14 @@
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 use warm_core::{Result, WarmError};
-use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519StaticSecret};
+pub use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519StaticSecret};
 
-/// Ed25519 key pair for digital signing (e.g. contest manifests, tokens).
 pub struct ManifestSigningKeypair {
     pub signing_key: SigningKey,
     pub verifying_key: VerifyingKey,
 }
 
 impl ManifestSigningKeypair {
-    /// Generate a cryptographically secure random Ed25519 key pair using OsRng.
     pub fn generate() -> Self {
         let mut csprng = OsRng;
         let signing_key = SigningKey::generate(&mut csprng);
@@ -21,7 +19,6 @@ impl ManifestSigningKeypair {
         }
     }
 
-    /// Load from a 32-byte private key seed.
     pub fn from_bytes(bytes: &[u8; 32]) -> Self {
         let signing_key = SigningKey::from_bytes(bytes);
         let verifying_key = signing_key.verifying_key();
@@ -31,12 +28,10 @@ impl ManifestSigningKeypair {
         }
     }
 
-    /// Sign an arbitrary message, returning a 64-byte Ed25519 signature.
     pub fn sign(&self, message: &[u8]) -> Signature {
         self.signing_key.sign(message)
     }
 
-    /// Sign and return hex-encoded signature string.
     pub fn sign_hex(&self, message: &[u8]) -> String {
         hex::encode(self.sign(message).to_bytes())
     }
@@ -50,7 +45,6 @@ impl ManifestSigningKeypair {
     }
 }
 
-/// Verify an Ed25519 signature given the raw public key bytes.
 pub fn verify_signature(
     public_key_bytes: &[u8; 32],
     message: &[u8],
@@ -65,7 +59,6 @@ pub fn verify_signature(
         .map_err(|e| WarmError::Verification(format!("Signature verification failed: {e}")))
 }
 
-/// Verify an Ed25519 signature from hex-encoded public key and signature.
 pub fn verify_signature_hex(
     public_key_hex: &str,
     message: &[u8],
@@ -90,14 +83,18 @@ pub fn verify_signature_hex(
     verify_signature(&pk, message, &sig)
 }
 
-/// Key pair for asymmetric audit encryption and decryption using X25519 Diffie-Hellman.
 pub struct EvidenceEncryptionKeypair {
     pub secret_key: X25519StaticSecret,
     pub public_key: X25519PublicKey,
 }
 
+impl Clone for EvidenceEncryptionKeypair {
+    fn clone(&self) -> Self {
+        Self::from_bytes(self.secret_key.to_bytes())
+    }
+}
+
 impl EvidenceEncryptionKeypair {
-    /// Generate a fresh X25519 static keypair.
     pub fn generate() -> Self {
         let secret_key = X25519StaticSecret::random_from_rng(OsRng);
         let public_key = X25519PublicKey::from(&secret_key);
@@ -116,7 +113,6 @@ impl EvidenceEncryptionKeypair {
         }
     }
 
-    /// Perform Diffie-Hellman key exchange with a peer's public key to compute a 32-byte shared secret.
     pub fn diffie_hellman(&self, peer_public: &X25519PublicKey) -> [u8; 32] {
         self.secret_key.diffie_hellman(peer_public).to_bytes()
     }
@@ -147,7 +143,6 @@ mod tests {
         let sig_hex = keypair.sign_hex(message);
         assert!(verify_signature_hex(&keypair.public_key_hex(), message, &sig_hex).is_ok());
 
-        // Tampered message should fail
         assert!(verify_signature_hex(&keypair.public_key_hex(), b"TAMPERED", &sig_hex).is_err());
     }
 

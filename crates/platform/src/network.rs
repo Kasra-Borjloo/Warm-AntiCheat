@@ -31,7 +31,6 @@ impl NetworkCollector {
         }
     }
 
-    /// Poll for network interface state changes.
     pub fn poll_events(&mut self) -> Vec<NetworkEventPayload> {
         self.networks.refresh();
         let mut events = Vec::new();
@@ -60,7 +59,6 @@ impl NetworkCollector {
         events
     }
 
-    /// Simulate network transition for unit tests.
     pub fn simulate_event(
         &mut self,
         interface_name: &str,
@@ -79,7 +77,6 @@ impl NetworkCollector {
     }
 }
 
-/// Helper classifying interface name into WiFi, Ethernet, Loopback, etc.
 pub fn classify_interface_name(name: &str) -> NetworkInterfaceType {
     let lower = name.to_lowercase();
     if lower.contains("vethernet") || lower.contains("vbox") || lower.contains("vmnet") {

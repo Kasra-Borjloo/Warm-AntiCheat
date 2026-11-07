@@ -24,7 +24,6 @@ impl ContestManifest {
             .map_err(|e| WarmError::Serialization(format!("Manifest serialization error: {e}")))
     }
 
-    /// Cryptographically signs this manifest using the Organizer's Ed25519 signing keypair.
     pub fn sign(&self, keypair: &ManifestSigningKeypair) -> Result<SignedContestManifest> {
         let bytes = self.canonical_bytes()?;
         let signature_hex = keypair.sign_hex(&bytes);
@@ -35,7 +34,6 @@ impl ContestManifest {
     }
 }
 
-/// Official signed contest manifest distributed to judges and participants.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SignedContestManifest {
     pub manifest: ContestManifest,
@@ -43,7 +41,6 @@ pub struct SignedContestManifest {
 }
 
 impl SignedContestManifest {
-    /// Verify the Ed25519 digital signature of the manifest using its declared signing key.
     pub fn verify(&self) -> Result<()> {
         let bytes = self.manifest.canonical_bytes()?;
         verify_signature_hex(
@@ -53,24 +50,55 @@ impl SignedContestManifest {
         )
     }
 
-    /// Verify signature with an explicit external public key.
     pub fn verify_with_key(&self, expected_public_key_hex: &str) -> Result<()> {
         let bytes = self.manifest.canonical_bytes()?;
         verify_signature_hex(expected_public_key_hex, &bytes, &self.signature_hex)
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ContestExportAuthToken {
+    pub contest_id: String,
+    pub contest_uuid: uuid::Uuid,
+    pub purpose: String,
+    pub created_at: DateTime<Utc>,
+    pub nonce: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SignedExportAuthToken {
+    pub token: ContestExportAuthToken,
+    pub signature_hex: String,
+}
+
+impl ContestExportAuthToken {
+    pub fn sign(&self, keypair: &ManifestSigningKeypair) -> Result<SignedExportAuthToken> {
+        let bytes =
+            serde_json::to_vec(self).map_err(|e| WarmError::Serialization(e.to_string()))?;
+        let signature_hex = keypair.sign_hex(&bytes);
+        Ok(SignedExportAuthToken {
+            token: self.clone(),
+            signature_hex,
+        })
+    }
+}
+
+impl SignedExportAuthToken {
+    pub fn verify(&self, public_key_hex: &str) -> Result<()> {
+        let bytes =
+            serde_json::to_vec(&self.token).map_err(|e| WarmError::Serialization(e.to_string()))?;
+        verify_signature_hex(public_key_hex, &bytes, &self.signature_hex)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Duration;
     use std::collections::BTreeMap;
 
     #[test]
     fn test_manifest_signing_and_verification() {
-        let start = Utc::now();
-        let end = start + Duration::hours(5);
-        let contest = Contest::new("GOCUP 1", "Org", "Desc", start, end).unwrap();
+        let contest = Contest::new("GOCUP 1", "Org", "Desc").unwrap();
 
         let signing_keypair = ManifestSigningKeypair::generate();
         let mut checksums = BTreeMap::new();
@@ -89,9 +117,23 @@ mod tests {
         let signed = manifest.sign(&signing_keypair).unwrap();
         assert!(signed.verify().is_ok());
 
-        // Altering title breaks signature
         let mut tampered = signed.clone();
         tampered.manifest.contest.title = "GOCUP 2".to_string();
         assert!(tampered.verify().is_err());
+
+        let token = ContestExportAuthToken {
+            contest_id: "GOCUP 1".to_string(),
+            contest_uuid: uuid::Uuid::new_v4(),
+            purpose: "CONTEST_LOG_EXPORT_AUTHORIZATION".to_string(),
+            created_at: Utc::now(),
+            nonce: "test-nonce-123".to_string(),
+        };
+        let signed_token = token.sign(&signing_keypair).unwrap();
+        assert!(signed_token
+            .verify(&signing_keypair.public_key_hex())
+            .is_ok());
+        assert!(signed_token
+            .verify("0000000000000000000000000000000000000000000000000000000000000000")
+            .is_err());
     }
 }

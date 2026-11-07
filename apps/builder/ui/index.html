@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Warm-AntiCheat | Contest Builder</title>
+  <link rel="icon" type="image/png" href="icon.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -59,7 +60,7 @@
             <span data-lucide="settings" data-size="22"></span>
             <h3>Basic Contest Information</h3>
           </div>
-          <p class="description">Define the competition name, organization, and scheduled time window.</p>
+          <p class="description">Define the competition name, identifier, and organizing institution.</p>
           
           <div class="form-grid">
             <div class="form-group">
@@ -81,16 +82,6 @@
             <div class="form-group">
               <label for="contestDesc">Description</label>
               <input type="text" id="contestDesc" value="National Algorithmic Programming Contest" placeholder="Brief contest overview">
-            </div>
-
-            <div class="form-group">
-              <label for="startTime">Competition Start Time (UTC) *</label>
-              <input type="datetime-local" id="startTime" required>
-            </div>
-
-            <div class="form-group">
-              <label for="endTime">Competition End Time (UTC) *</label>
-              <input type="datetime-local" id="endTime" required>
             </div>
           </div>
         </div>
@@ -118,21 +109,53 @@
           </div>
 
           <div id="accountsActionGroup" style="display: none; margin-top: 1rem;">
-            <button class="btn btn-secondary" id="previewAccountsBtn">
-              <span data-lucide="key" data-size="16"></span>
-              <span>Generate &amp; Review Credentials</span>
-            </button>
-            <div id="accountsPreviewArea" style="margin-top: 0.75rem; display: none;">
-              <span class="badge badge-success" id="accountsStatusBadge"></span>
-              <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                <button class="btn btn-secondary btn-sm" id="downloadCsvBtn">
-                  <span data-lucide="download" data-size="14"></span>
-                  <span>Export CSV</span>
-                </button>
-                <button class="btn btn-secondary btn-sm" id="downloadPrintableBtn">
-                  <span data-lucide="file-text" data-size="14"></span>
-                  <span>Printable Sheet</span>
-                </button>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <button class="btn btn-primary" id="previewAccountsBtn">
+                <span data-lucide="key" data-size="16"></span>
+                <span>Generate Accounts</span>
+              </button>
+              <button class="btn btn-secondary" id="regenerateAccountsBtn" style="display: none;">
+                <span data-lucide="zap" data-size="16"></span>
+                <span>Regenerate</span>
+              </button>
+              <button class="btn btn-secondary" id="copyAllCredsBtn" style="display: none;">
+                <span data-lucide="file-text" data-size="16"></span>
+                <span>Copy All</span>
+              </button>
+              <button class="btn btn-secondary" id="downloadCsvBtn" style="display: none;">
+                <span data-lucide="download" data-size="16"></span>
+                <span>Export CSV</span>
+              </button>
+              <button class="btn btn-secondary" id="downloadPdfBtn" style="display: none;">
+                <span data-lucide="download" data-size="16"></span>
+                <span>Export PDF</span>
+              </button>
+            </div>
+
+            <div id="accountsPreviewArea" style="margin-top: 1rem; display: none;">
+              <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 0.75rem; margin-bottom: 1rem;">
+                <strong style="color: #ef4444;"><span data-lucide="shield-alert" data-size="16"></span> Confidential Credentials:</strong>
+                <span style="font-size: 0.85rem; color: var(--text-color);"> These passwords are visible exclusively to the contest administrator. They are not bundled into participant packages or stored in public logs.</span>
+              </div>
+
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <span class="badge badge-success" id="accountsStatusBadge"></span>
+                <input type="text" id="accountsSearchInput" placeholder="Filter by username or UUID..." style="width: 250px; font-size: 0.85rem; padding: 0.35rem 0.5rem;">
+              </div>
+
+              <div style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px;">
+                <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                  <thead>
+                    <tr style="background: var(--bg-card); position: sticky; top: 0; z-index: 1;">
+                      <th style="padding: 0.5rem; text-align: left; width: 40px;">#</th>
+                      <th style="padding: 0.5rem; text-align: left;">Username</th>
+                      <th style="padding: 0.5rem; text-align: left;">Password</th>
+                      <th style="padding: 0.5rem; text-align: left;">Account UUID</th>
+                      <th style="padding: 0.5rem; text-align: center; width: 140px;">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="accountsTableBody"></tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -166,17 +189,6 @@
             <div class="input-with-btn">
               <input type="text" id="newDomainInput" placeholder="Add domain (e.g. chatgpt.com)">
               <button class="btn btn-secondary" id="addDomainBtn"><span data-lucide="plus" data-size="16"></span> Add Domain</button>
-            </div>
-          </div>
-
-          <div class="form-grid mt-4">
-            <div class="form-group">
-              <label for="heartbeatInterval">Heartbeat Interval (seconds)</label>
-              <input type="number" id="heartbeatInterval" value="15" min="5" max="120">
-            </div>
-            <div class="form-group">
-              <label for="retentionDays">Event Retention Period (days)</label>
-              <input type="number" id="retentionDays" value="30" min="7" max="365">
             </div>
           </div>
 
@@ -236,7 +248,13 @@
           <div class="form-grid mt-4">
             <div class="form-group">
               <label for="outputDirectory">Output Directory</label>
-              <input type="text" id="outputDirectory" value="./dist">
+              <div class="input-with-btn">
+                <input type="text" id="outputDirectory" value="./dist">
+                <button class="btn btn-secondary" id="browseOutputDirBtn" type="button">
+                  <span data-lucide="folder" data-size="16"></span> Browse...
+                </button>
+              </div>
+              <span class="hint">Directory where contest packages and participant executables are generated.</span>
             </div>
             <div class="form-group">
               <label for="clientTheme">Participant Client Default Theme</label>
@@ -260,15 +278,15 @@
             <span data-lucide="package" data-size="22"></span>
             <h3>Generate Contest Distribution Package</h3>
           </div>
-          <p class="description">Generate cryptographic keys, sign contest manifests, and build packages.</p>
+          <p class="description">Generate cryptographic keys, sign contest manifests, and assemble participant packages.</p>
 
           <div class="summary-box">
             <div class="summary-item"><strong>Title:</strong> <span id="summaryTitle">GOCUP 1</span></div>
             <div class="summary-item"><strong>Identifier:</strong> <span id="summaryId">gocup-1</span></div>
             <div class="summary-item"><strong>Organizer:</strong> <span id="summaryOrganizer">Sharif University Computer Society</span></div>
             <div class="summary-item"><strong>Participation Mode:</strong> <span id="summaryMode">Mode A (No Accounts)</span></div>
-            <div class="summary-item"><strong>Prohibited Executables:</strong> <span id="summaryAppsCount">16</span> rules</div>
-            <div class="summary-item"><strong>Restricted Domains:</strong> <span id="summaryDomainsCount">11</span> domains</div>
+            <div class="summary-item"><strong>Prohibited Executables:</strong> <span id="summaryAppsCount">24</span> rules</div>
+            <div class="summary-item"><strong>Restricted Domains:</strong> <span id="summaryDomainsCount">8</span> domains</div>
             <div class="summary-item"><strong>Output Directory:</strong> <span id="summaryOutput">./dist/gocup-1/</span></div>
           </div>
 
@@ -277,6 +295,14 @@
               <span data-lucide="package" data-size="20"></span>
               <span>Generate Contest Package</span>
             </button>
+          </div>
+
+          <div id="generationSuccessCard" style="display: none; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 8px; padding: 1rem; margin-top: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; color: #22c55e;">
+              <span data-lucide="check-circle" data-size="22"></span>
+              <strong style="font-size: 1.05rem;">Contest Package Generated Successfully!</strong>
+            </div>
+            <p id="generationSuccessMessage" style="margin: 0.5rem 0 0 0; font-size: 0.9rem;"></p>
           </div>
 
           <div class="build-logs-container" id="logsContainer" style="display: none;">

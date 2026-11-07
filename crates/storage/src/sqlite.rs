@@ -7,7 +7,6 @@ use warm_core::{Result, WarmError};
 use warm_crypto::{compute_event_hash, compute_genesis_hash, SealedPayload};
 use warm_events::EventCategory;
 
-/// Stored representation of an audit event as stored in SQLite.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredAuditEvent {
     pub sequence_number: u64,
@@ -23,7 +22,6 @@ pub struct StoredAuditEvent {
     pub current_event_hash: String,
 }
 
-/// Verification result details returned by `verify_integrity`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IntegrityReport {
     pub total_events: u64,
@@ -35,13 +33,21 @@ pub struct IntegrityReport {
     pub anomalies: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionRecoveryInfo {
+    pub contest_uuid: Uuid,
+    pub participant_id: String,
+    pub session_id: Uuid,
+    pub last_sequence: u64,
+    pub last_hash: String,
+}
+
 #[derive(Clone)]
 pub struct SqliteAuditStore {
     conn: Arc<Mutex<Connection>>,
 }
 
 impl SqliteAuditStore {
-    /// Open or create an SQLite database on disk.
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let conn = Connection::open(path)
             .map_err(|e| WarmError::Storage(format!("Failed to open SQLite database: {e}")))?;
@@ -52,7 +58,6 @@ impl SqliteAuditStore {
         Ok(store)
     }
 
-    /// Open an ephemeral in-memory SQLite database (used for testing).
     pub fn open_in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()
             .map_err(|e| WarmError::Storage(format!("Failed to open in-memory SQLite: {e}")))?;
@@ -94,7 +99,6 @@ impl SqliteAuditStore {
         Ok(())
     }
 
-    /// Record a sealed audit event into the append-only ledger.
     #[allow(clippy::too_many_arguments)]
     pub fn record_event(
         &self,
@@ -149,7 +153,6 @@ impl SqliteAuditStore {
         Ok(())
     }
 
-    /// Force a WAL checkpoint to flush all committed transactions into the main database file.
     pub fn checkpoint(&self) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
@@ -157,7 +160,6 @@ impl SqliteAuditStore {
         Ok(())
     }
 
-    /// Retrieve the highest recorded sequence number and its event hash for resuming state.
     pub fn get_latest_event_info(&self) -> Result<Option<(u64, String)>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
@@ -179,7 +181,38 @@ impl SqliteAuditStore {
         }
     }
 
-    /// Retrieve total count of events in storage.
+    pub fn get_session_recovery_info(&self) -> Result<Option<SessionRecoveryInfo>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT contest_uuid, participant_id, session_id, sequence_number, current_event_hash FROM audit_events ORDER BY sequence_number DESC LIMIT 1",
+            )
+            .map_err(|e| WarmError::Storage(e.to_string()))?;
+
+        let mut rows = stmt
+            .query([])
+            .map_err(|e| WarmError::Storage(e.to_string()))?;
+
+        if let Some(row) = rows.next().map_err(|e| WarmError::Storage(e.to_string()))? {
+            let c_uuid_str: String = row.get(0).map_err(|e| WarmError::Storage(e.to_string()))?;
+            let pid: String = row.get(1).map_err(|e| WarmError::Storage(e.to_string()))?;
+            let s_uuid_str: String = row.get(2).map_err(|e| WarmError::Storage(e.to_string()))?;
+            let seq: i64 = row.get(3).map_err(|e| WarmError::Storage(e.to_string()))?;
+            let hash: String = row.get(4).map_err(|e| WarmError::Storage(e.to_string()))?;
+            let c_uuid = Uuid::parse_str(&c_uuid_str).unwrap_or_default();
+            let s_uuid = Uuid::parse_str(&s_uuid_str).unwrap_or_default();
+            Ok(Some(SessionRecoveryInfo {
+                contest_uuid: c_uuid,
+                participant_id: pid,
+                session_id: s_uuid,
+                last_sequence: seq as u64,
+                last_hash: hash,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn get_event_count(&self) -> Result<u64> {
         let conn = self.conn.lock().unwrap();
         let count: i64 = conn
@@ -188,7 +221,6 @@ impl SqliteAuditStore {
         Ok(count as u64)
     }
 
-    /// Retrieve all audit events in ascending sequence order.
     pub fn get_all_events(&self) -> Result<Vec<StoredAuditEvent>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
@@ -257,7 +289,6 @@ impl SqliteAuditStore {
         Ok(events)
     }
 
-    /// Verifies the full cryptographic hash chain and sequence continuity from Genesis to End.
     pub fn verify_integrity(
         &self,
         expected_contest_uuid: &Uuid,
@@ -283,7 +314,6 @@ impl SqliteAuditStore {
         let mut prev_hash = genesis_hash.clone();
 
         for (idx, event) in events.iter().enumerate() {
-            // 1. Sequence number continuity
             if event.sequence_number != expected_seq {
                 anomalies.push(format!(
                     "Sequence gap detected at index {}: expected {}, found {}",
@@ -291,7 +321,6 @@ impl SqliteAuditStore {
                 ));
             }
 
-            // 2. Contest UUID match
             if event.contest_uuid != *expected_contest_uuid {
                 anomalies.push(format!(
                     "Contest UUID mismatch at seq {}: expected {}, found {}",
@@ -299,7 +328,6 @@ impl SqliteAuditStore {
                 ));
             }
 
-            // 3. Participant ID match
             if event.participant_id != expected_participant_id {
                 anomalies.push(format!(
                     "Participant ID mismatch at seq {}: expected {}, found {}",
@@ -307,7 +335,6 @@ impl SqliteAuditStore {
                 ));
             }
 
-            // 4. Previous hash link check
             if event.previous_event_hash != prev_hash {
                 anomalies.push(format!(
                     "Previous hash link mismatch at seq {}: expected {}, found {}",
@@ -315,7 +342,6 @@ impl SqliteAuditStore {
                 ));
             }
 
-            // 5. Current hash re-computation check
             let computed_hash = compute_event_hash(
                 event.sequence_number,
                 &event.timestamp_rfc3339,

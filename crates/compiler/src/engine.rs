@@ -3,12 +3,13 @@ use crate::toolchain::ToolchainSpec;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Instant;
 use warm_crypto::sha256_digest;
 
-/// Input parameters for a C++ compilation attempt.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompilationRequest {
     pub source_path: PathBuf,
@@ -32,7 +33,6 @@ impl Default for CompilationRequest {
     }
 }
 
-/// Output data and forensic artifacts from a compilation attempt.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CompilationResult {
     pub success: bool,
@@ -64,15 +64,12 @@ impl CompilerEngine {
         &self.toolchain
     }
 
-    /// Securely compile a C++ source file using the bundled, isolated GNU G++ compiler.
     pub fn compile(&self, req: CompilationRequest) -> Result<CompilationResult> {
         let start_time = Utc::now();
         let timer = Instant::now();
 
-        // 1. Resolve source code and compute cryptographic hash snapshot
         let (source_file, source_snapshot, source_sha256) = self.prepare_source_file(&req)?;
 
-        // 2. Prepare safe isolated output directory
         let temp_dir = if let Some(ref d) = req.output_dir {
             fs::create_dir_all(d)?;
             None
@@ -97,7 +94,6 @@ impl CompilerEngine {
         let output_binary =
             target_dir.join(format!("contest_bin_{}.{}", uuid::Uuid::new_v4(), out_ext));
 
-        // 3. Assemble arguments safely without shell interpolation
         let mut args = Vec::new();
         args.push(req.standard.unwrap_or_else(|| "-std=c++23".to_string()));
         args.push(req.optimization_level.unwrap_or_else(|| "-O2".to_string()));
@@ -112,16 +108,18 @@ impl CompilerEngine {
         args.push("-o".to_string());
         args.push(output_binary.to_string_lossy().to_string());
 
-        // 4. Configure command with completely isolated process environment
         let mut cmd = Command::new(&self.toolchain.gxx_path);
         cmd.args(&args);
 
         let bin_dir = self.toolchain.root_dir.join("bin");
         #[cfg(target_os = "windows")]
-        cmd.env(
-            "PATH",
-            format!("{};C:\\Windows\\System32", bin_dir.display()),
-        );
+        {
+            cmd.creation_flags(0x08000000);
+            cmd.env(
+                "PATH",
+                format!("{};C:\\Windows\\System32", bin_dir.display()),
+            );
+        }
         #[cfg(not(target_os = "windows"))]
         cmd.env("PATH", format!("{}:/usr/lib:/lib", bin_dir.display()));
 

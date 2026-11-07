@@ -1,5 +1,3 @@
-//! Built-in offline C++23 compiler engine, execution runner, and toolchain manager for Warm-AntiCheat.
-
 pub mod engine;
 pub mod error;
 pub mod event;

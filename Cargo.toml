@@ -47,6 +47,7 @@ hkdf = "0.12"
 subtle = "2.6"
 base64 = "0.22"
 tempfile = "3.12"
+tar = "0.4"
 tauri = { version = "2", default-features = false, features = ["wry", "common-controls-v6"] }
 tauri-build = { version = "2", default-features = false }
 

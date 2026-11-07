@@ -3,7 +3,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Represents an authorized competition/contest specification.
+fn default_retention_days() -> u32 {
+    30
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Contest {
     pub id: String,
@@ -11,9 +14,12 @@ pub struct Contest {
     pub title: String,
     pub organizer: String,
     pub description: String,
-    pub start_time: DateTime<Utc>,
-    pub end_time: DateTime<Utc>,
+    #[serde(default)]
+    pub start_time: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub end_time: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    #[serde(default = "default_retention_days")]
     pub retention_days: u32,
 }
 
@@ -22,8 +28,6 @@ impl Contest {
         title: impl Into<String>,
         organizer: impl Into<String>,
         description: impl Into<String>,
-        start_time: DateTime<Utc>,
-        end_time: DateTime<Utc>,
     ) -> Result<Self> {
         let title = title.into().trim().to_string();
         let organizer = organizer.into().trim().to_string();
@@ -35,11 +39,6 @@ impl Contest {
         if organizer.is_empty() {
             return Err(WarmError::Contest("Organizer name cannot be empty".into()));
         }
-        if end_time <= start_time {
-            return Err(WarmError::Contest(
-                "End time must be strictly after start time".into(),
-            ));
-        }
 
         let slug = slugify(&title);
         let uuid = Uuid::new_v4();
@@ -50,11 +49,31 @@ impl Contest {
             title,
             organizer,
             description,
-            start_time,
-            end_time,
+            start_time: None,
+            end_time: None,
             created_at: Utc::now(),
             retention_days: 30,
         })
+    }
+
+    pub fn with_times(
+        title: impl Into<String>,
+        organizer: impl Into<String>,
+        description: impl Into<String>,
+        start_time: Option<DateTime<Utc>>,
+        end_time: Option<DateTime<Utc>>,
+    ) -> Result<Self> {
+        let mut contest = Self::new(title, organizer, description)?;
+        if let (Some(start), Some(end)) = (start_time, end_time) {
+            if end <= start {
+                return Err(WarmError::Contest(
+                    "End time must be strictly after start time".into(),
+                ));
+            }
+        }
+        contest.start_time = start_time;
+        contest.end_time = end_time;
+        Ok(contest)
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -69,20 +88,26 @@ impl Contest {
                 "Contest identifier cannot be empty".into(),
             ));
         }
-        if self.end_time <= self.start_time {
-            return Err(WarmError::Contest(
-                "End time must be strictly after start time".into(),
-            ));
+        if let (Some(start), Some(end)) = (self.start_time, self.end_time) {
+            if end <= start {
+                return Err(WarmError::Contest(
+                    "End time must be strictly after start time".into(),
+                ));
+            }
         }
         Ok(())
     }
 
     pub fn is_active_at(&self, time: DateTime<Utc>) -> bool {
-        time >= self.start_time && time <= self.end_time
+        match (self.start_time, self.end_time) {
+            (Some(start), Some(end)) => time >= start && time <= end,
+            (Some(start), None) => time >= start,
+            (None, Some(end)) => time <= end,
+            (None, None) => true,
+        }
     }
 }
 
-/// Convert arbitrary contest title to URL- and file-safe identifier slug.
 pub fn slugify(title: &str) -> String {
     let mut slug = String::new();
     let mut prev_dash = false;
@@ -119,22 +144,33 @@ mod tests {
 
     #[test]
     fn test_contest_creation_valid() {
-        let start = Utc::now();
-        let end = start + Duration::hours(5);
-        let contest = Contest::new("GOCUP 1", "Sharif Org", "Annual contest", start, end).unwrap();
-
+        let contest = Contest::new("GOCUP 1", "Sharif Org", "Annual contest").unwrap();
         assert_eq!(contest.title, "GOCUP 1");
         assert_eq!(contest.id, "gocup-1");
-        assert!(contest.is_active_at(start + Duration::hours(2)));
-        assert!(!contest.is_active_at(start - Duration::hours(1)));
-        assert!(!contest.is_active_at(end + Duration::hours(1)));
+        assert!(contest.start_time.is_none());
+        assert!(contest.end_time.is_none());
+        assert!(contest.is_active_at(Utc::now()));
+
+        let start = Utc::now();
+        let end = start + Duration::hours(5);
+        let contest_with_times = Contest::with_times(
+            "GOCUP 1",
+            "Sharif Org",
+            "Annual contest",
+            Some(start),
+            Some(end),
+        )
+        .unwrap();
+        assert!(contest_with_times.is_active_at(start + Duration::hours(2)));
+        assert!(!contest_with_times.is_active_at(start - Duration::hours(1)));
+        assert!(!contest_with_times.is_active_at(end + Duration::hours(1)));
     }
 
     #[test]
     fn test_contest_invalid_times() {
         let start = Utc::now();
         let end = start - Duration::hours(1);
-        let res = Contest::new("GOCUP 1", "Org", "Desc", start, end);
+        let res = Contest::with_times("GOCUP 1", "Org", "Desc", Some(start), Some(end));
         assert!(res.is_err());
     }
 }

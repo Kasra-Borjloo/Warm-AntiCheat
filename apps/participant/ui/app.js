@@ -37,6 +37,20 @@ const modalLogNameInput = document.getElementById('modalLogNameInput');
 const modalLogNameError = document.getElementById('modalLogNameError');
 const modalCancelBtn = document.getElementById('modalCancelBtn');
 const modalConfirmExportBtn = document.getElementById('modalConfirmExportBtn');
+const loginNoticeAck = document.getElementById('loginNoticeAck');
+const enrollNoticeAck = document.getElementById('enrollNoticeAck');
+
+if (loginNoticeAck) {
+  loginNoticeAck.addEventListener('change', () => {
+    submitLoginBtn.disabled = !loginNoticeAck.checked;
+  });
+}
+
+if (enrollNoticeAck) {
+  enrollNoticeAck.addEventListener('change', () => {
+    startSessionBtn.disabled = !enrollNoticeAck.checked;
+  });
+}
 
 const compileRunBtn = document.getElementById('compileRunBtn');
 const stopExecutionBtn = document.getElementById('stopExecutionBtn');
@@ -66,8 +80,19 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 async function checkParticipationMode() {
   if (window.__TAURI__ && window.__TAURI__.core) {
     try {
+      const info = await window.__TAURI__.core.invoke('get_app_info');
+      if (info && info.contest_title) {
+        const titleEl = document.getElementById('contestHeaderTitle');
+        if (titleEl) titleEl.textContent = info.contest_title;
+        document.title = `Warm-AntiCheat | ${info.contest_title}`;
+      }
+    } catch (e) {
+      console.warn('App info error:', e);
+    }
+
+    try {
       const modeInfo = await window.__TAURI__.core.invoke('get_participation_mode');
-      state.contestId = modeInfo.contest_id || 'gocup-1';
+      state.contestId = modeInfo.contest_id || 'warm-contest';
       state.requiresLogin = modeInfo.requires_login;
 
       if (state.requiresLogin) {
@@ -142,15 +167,39 @@ startSessionBtn.addEventListener('click', () => {
   startSession();
 });
 
-concludeSessionBtn.addEventListener('click', () => {
+concludeSessionBtn.addEventListener('click', async () => {
   state.sessionActive = false;
   clearInterval(state.timerInterval);
 
   sessionStatusIndicator.className = 'status-indicator status-idle';
   sessionStatusText.textContent = 'Session Concluded';
 
+  if (window.__TAURI__ && window.__TAURI__.core) {
+    try {
+      await window.__TAURI__.core.invoke('conclude_session');
+    } catch (e) {
+      console.warn('Conclude error:', e);
+    }
+  }
+
   alert('Session concluded. Navigate to Export Evidence tab to export your audit log.');
 });
+
+const browseExportDirBtn = document.getElementById('browseExportDirBtn');
+if (browseExportDirBtn) {
+  browseExportDirBtn.addEventListener('click', async () => {
+    if (window.__TAURI__ && window.__TAURI__.core) {
+      try {
+        const selected = await window.__TAURI__.core.invoke('pick_export_folder');
+        if (selected) {
+          exportPathInput.value = selected;
+        }
+      } catch (e) {
+        console.error('Directory picker error:', e);
+      }
+    }
+  });
+}
 
 function updateTimer() {
   if (!state.startTime) return;
@@ -162,14 +211,39 @@ function updateTimer() {
   const secs = String(diff % 60).padStart(2, '0');
 
   elapsedTimer.textContent = `${hours}:${mins}:${secs}`;
-  state.eventsCount += 1;
-  eventsCountEl.textContent = state.eventsCount;
 }
 
-exportBtn.addEventListener('click', () => {
-  modalLogNameInput.value = state.participantId || '';
-  modalLogNameError.style.display = 'none';
-  exportModalOverlay.style.display = 'flex';
+exportBtn.addEventListener('click', async () => {
+  if (state.requiresLogin) {
+    exportResult.style.display = 'none';
+    const dest = exportPathInput.value.trim() || './export';
+
+    if (window.__TAURI__ && window.__TAURI__.core) {
+      try {
+        const res = await window.__TAURI__.core.invoke('export_contest_log', {
+          destFolder: dest,
+          declaredLogName: null
+        });
+
+        exportResult.style.display = 'block';
+        if (res.success) {
+          exportResultText.textContent = `${res.message} Archive: ${res.export_path} (SHA-256: ${res.checksum})`;
+        } else {
+          exportResultText.textContent = res.message;
+        }
+      } catch (err) {
+        exportResult.style.display = 'block';
+        exportResultText.textContent = `Export error: ${err}`;
+      }
+    } else {
+      exportResult.style.display = 'block';
+      exportResultText.textContent = `Evidence package exported for account ${state.participantId}`;
+    }
+  } else {
+    modalLogNameInput.value = state.participantId || '';
+    modalLogNameError.style.display = 'none';
+    exportModalOverlay.style.display = 'flex';
+  }
 });
 
 modalCancelBtn.addEventListener('click', () => {
@@ -183,7 +257,7 @@ modalConfirmExportBtn.addEventListener('click', async () => {
   if (window.__TAURI__ && window.__TAURI__.core) {
     try {
       const valid = await window.__TAURI__.core.invoke('validate_log_name', { name: declaredName });
-      const dest = exportPathInput.value || './export';
+      const dest = exportPathInput.value.trim() || './export';
       const res = await window.__TAURI__.core.invoke('export_contest_log', {
         destFolder: dest,
         declaredLogName: valid
@@ -275,6 +349,35 @@ async function checkCompilerStatus() {
     }
   }
 }
+
+setInterval(async () => {
+  if (window.__TAURI__ && window.__TAURI__.core) {
+    try {
+      const stats = await window.__TAURI__.core.invoke('get_session_stats');
+      if (stats) {
+        state.eventsCount = stats.event_count;
+        eventsCountEl.textContent = stats.event_count;
+        if (!stats.running && state.sessionActive) {
+          state.sessionActive = false;
+          if (state.timerInterval) clearInterval(state.timerInterval);
+          sessionStatusIndicator.className = 'status-indicator status-idle';
+          sessionStatusText.textContent = 'Session Concluded';
+        }
+      }
+
+      const usb = await window.__TAURI__.core.invoke('get_usb_status');
+      if (usb && usb.success) {
+        const usbAlert = document.getElementById('usbExportAlert');
+        const usbText = document.getElementById('usbAlertText');
+        if (usbAlert && usbText) {
+          usbText.textContent = `${usb.message} (SHA-256: ${usb.checksum})`;
+          usbAlert.style.display = 'block';
+          if (window.replaceLucideIcons) window.replaceLucideIcons();
+        }
+      }
+    } catch (e) {}
+  }
+}, 2000);
 
 checkParticipationMode();
 checkCompilerStatus();

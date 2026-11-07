@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 use warm_verifier::ForensicReport;
 
-/// Deterministic audit statistics and performance metrics.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuditStats {
     pub total_events: u64,
@@ -15,7 +14,6 @@ pub struct AuditStats {
 pub struct DeterministicAuditEngine;
 
 impl DeterministicAuditEngine {
-    /// Analyze an existing forensic report and compute metrics and timing.
     pub fn compute_stats(report: &ForensicReport) -> AuditStats {
         let start = Instant::now();
         let mut distribution = BTreeMap::new();
@@ -68,6 +66,7 @@ mod tests {
             authenticated_account_id: None,
             declared_log_name: None,
             participation_mode: warm_core::ParticipationMode::NoAccounts,
+            screenshots: Vec::new(),
         };
 
         let stats = DeterministicAuditEngine::compute_stats(&report);

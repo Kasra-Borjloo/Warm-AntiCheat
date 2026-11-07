@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Warm-AntiCheat | Judge Verifier</title>
+  <link rel="icon" type="image/png" href="icon.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -91,6 +92,15 @@
             <h3>Forensic Findings &amp; Violations</h3>
           </div>
           <div class="findings-list" id="findingsList"></div>
+        </div>
+
+        <div class="card mt-4" id="evidenceScreenshotsCard" style="display: none;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <span data-lucide="camera" data-size="20"></span>
+            <h3>Event-Triggered Evidence Screenshots</h3>
+          </div>
+          <p class="description">Authorized screen captures triggered during suspicious process execution or security events.</p>
+          <div id="screenshotsGallery" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; margin-top: 1rem;"></div>
         </div>
 
         <div class="card mt-4 ai-card">

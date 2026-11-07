@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title id="windowTitle">Warm-AntiCheat | Participant Client</title>
+  <link rel="icon" type="image/png" href="icon.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -53,8 +54,27 @@
           <span id="loginErrorText">Invalid credentials</span>
         </div>
 
+        <div class="callout mt-4" style="background: rgba(14, 165, 233, 0.08); border-left: 4px solid #0284c7; padding: 1rem; border-radius: 6px;">
+          <h4 style="margin: 0 0 0.5rem 0; color: #38bdf8; display: flex; align-items: center; gap: 0.5rem;">
+            <span data-lucide="info" data-size="18"></span> Contest Monitoring Notice
+          </h4>
+          <p style="font-size: 0.88rem; line-height: 1.5; color: #cbd5e1; margin-bottom: 0.5rem;">
+            From the moment you start your contest session until the moment it officially ends, all activities performed on this device may be monitored and recorded by Warm-AntiCheat.
+          </p>
+          <p style="font-size: 0.88rem; line-height: 1.5; color: #cbd5e1; margin-bottom: 0.5rem;">
+            Monitoring is strictly limited to the active contest session. Warm-AntiCheat will not intentionally access or monitor personal files or activities from before or after the contest.
+          </p>
+          <p style="font-size: 0.88rem; line-height: 1.5; color: #cbd5e1; margin-bottom: 0.75rem;">
+            By starting the contest, you acknowledge that your activity during the contest may be monitored for competition integrity and reviewed by authorized judges.
+          </p>
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; color: #f1f5f9; cursor: pointer;">
+            <input type="checkbox" id="loginNoticeAck" style="width: 16px; height: 16px; cursor: pointer;">
+            <span>I acknowledge and agree to the contest monitoring policy</span>
+          </label>
+        </div>
+
         <div class="action-row mt-4">
-          <button class="btn btn-primary btn-lg" id="submitLoginBtn">
+          <button class="btn btn-primary btn-lg" id="submitLoginBtn" disabled>
             <span data-lucide="log-in" data-size="18"></span>
             <span>Authenticate &amp; Enter Contest</span>
           </button>
@@ -78,8 +98,27 @@
           <input type="text" id="enrollmentToken" value="WARM-GOCUP-1-TEAM42-VALIDTOKEN" placeholder="Paste your proctor-issued token">
         </div>
 
+        <div class="callout mt-4" style="background: rgba(14, 165, 233, 0.08); border-left: 4px solid #0284c7; padding: 1rem; border-radius: 6px;">
+          <h4 style="margin: 0 0 0.5rem 0; color: #38bdf8; display: flex; align-items: center; gap: 0.5rem;">
+            <span data-lucide="info" data-size="18"></span> Contest Monitoring Notice
+          </h4>
+          <p style="font-size: 0.88rem; line-height: 1.5; color: #cbd5e1; margin-bottom: 0.5rem;">
+            From the moment you start your contest session until the moment it officially ends, all activities performed on this device may be monitored and recorded by Warm-AntiCheat.
+          </p>
+          <p style="font-size: 0.88rem; line-height: 1.5; color: #cbd5e1; margin-bottom: 0.5rem;">
+            Monitoring is strictly limited to the active contest session. Warm-AntiCheat will not intentionally access or monitor personal files or activities from before or after the contest.
+          </p>
+          <p style="font-size: 0.88rem; line-height: 1.5; color: #cbd5e1; margin-bottom: 0.75rem;">
+            By starting the contest, you acknowledge that your activity during the contest may be monitored for competition integrity and reviewed by authorized judges.
+          </p>
+          <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; color: #f1f5f9; cursor: pointer;">
+            <input type="checkbox" id="enrollNoticeAck" style="width: 16px; height: 16px; cursor: pointer;">
+            <span>I acknowledge and agree to the contest monitoring policy</span>
+          </label>
+        </div>
+
         <div class="action-row mt-4">
-          <button class="btn btn-primary btn-lg" id="startSessionBtn">
+          <button class="btn btn-primary btn-lg" id="startSessionBtn" disabled>
             <span data-lucide="play" data-size="18"></span>
             <span>Start Competition Session</span>
           </button>
@@ -148,34 +187,24 @@
 
     <div class="tab-content" id="privacyTab">
       <div class="card">
-        <h2>Privacy &amp; Data Disclosure Notice</h2>
-        <p class="description">Warm-AntiCheat operates with complete transparency regarding monitored metrics.</p>
-
-        <div class="privacy-grid mt-2">
-          <div class="privacy-col">
-            <h4 class="text-success"><span data-lucide="check" data-size="16"></span> What IS Recorded</h4>
-            <ul>
-              <li>Process startup and shutdown events (PID, name)</li>
-              <li>Prohibited AI runtime detection</li>
-              <li>Restricted domain navigation events</li>
-              <li>Network adapter transitions (Wi-Fi / Ethernet state)</li>
-              <li>System sleep, wake, and heartbeat markers</li>
-            </ul>
-          </div>
-          <div class="privacy-col">
-            <h4 class="text-danger"><span data-lucide="x" data-size="16"></span> What is NEVER Recorded</h4>
-            <ul>
-              <li>No keystrokes or arbitrary keyboard recording</li>
-              <li>No webcam, microphone, or audio access</li>
-              <li>No desktop screen recording or streaming</li>
-              <li>No access to personal documents or unrelated files</li>
-              <li>No personal browsing history outside restricted domains</li>
-            </ul>
-          </div>
+        <h2>Contest Monitoring Notice &amp; Privacy</h2>
+        <div class="callout mt-2" style="background: rgba(14, 165, 233, 0.08); border-left: 4px solid #0284c7; padding: 1.25rem; border-radius: 6px;">
+          <h3 style="margin-top: 0; color: #38bdf8; display: flex; align-items: center; gap: 0.5rem;">
+            <span data-lucide="shield" data-size="20"></span> Contest Monitoring Notice
+          </h3>
+          <p style="font-size: 0.95rem; line-height: 1.6; color: #e2e8f0; margin-bottom: 0.75rem;">
+            From the moment you start your contest session until the moment it officially ends, all activities performed on this device may be monitored and recorded by Warm-AntiCheat.
+          </p>
+          <p style="font-size: 0.95rem; line-height: 1.6; color: #e2e8f0; margin-bottom: 0.75rem;">
+            Monitoring is strictly limited to the active contest session. Warm-AntiCheat will not intentionally access or monitor personal files or activities from before or after the contest.
+          </p>
+          <p style="font-size: 0.95rem; line-height: 1.6; color: #e2e8f0; margin-bottom: 0;">
+            By starting the contest, you acknowledge that your activity during the contest may be monitored for competition integrity and reviewed by authorized judges.
+          </p>
         </div>
 
         <div class="callout mt-4">
-          <strong>Asymmetric Privacy Guarantee:</strong> All event payloads are encrypted with AES-256-GCM using the competition judge's public key. Data cannot be read by anyone on your machine.
+          <strong>Asymmetric Privacy Guarantee:</strong> All event payloads and evidence attachments are encrypted with AES-256-GCM using the competition judge's public key. Data cannot be read by anyone on your machine.
         </div>
       </div>
     </div>
@@ -244,7 +273,12 @@ int main() {
 
         <div class="form-group mt-2">
           <label for="exportPathInput">Export Destination Directory</label>
-          <input type="text" id="exportPathInput" value="./export">
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="text" id="exportPathInput" value="./export" style="flex: 1;">
+            <button class="btn btn-secondary" id="browseExportDirBtn" type="button" style="white-space: nowrap;">
+              <span data-lucide="folder-open" data-size="16"></span> Browse...
+            </button>
+          </div>
         </div>
 
         <div class="action-row mt-4">
@@ -256,6 +290,14 @@ int main() {
 
         <div class="callout mt-4" id="exportResult" style="display: none;">
           <strong>Export Status:</strong> <span id="exportResultText"></span>
+        </div>
+
+        <div class="callout mt-4" id="usbExportAlert" style="display: none; background: rgba(34, 197, 94, 0.1); border-left: 4px solid #22c55e; color: #4ade80;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span data-lucide="check-circle" data-size="18"></span>
+            <strong>Authorized USB Drive Detected</strong>
+          </div>
+          <p id="usbAlertText" style="margin: 0.5rem 0 0 0; font-size: 0.9rem;"></p>
         </div>
       </div>
     </div>

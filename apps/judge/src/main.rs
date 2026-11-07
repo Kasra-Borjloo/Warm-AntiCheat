@@ -1,9 +1,9 @@
-//! Warm-AntiCheat Judge Verifier Application Entry Point
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use uuid::Uuid;
 use warm_audit::{DeterministicAuditEngine, LocalAiSummarizer};
 use warm_crypto::{verify_signature_hex, EvidenceEncryptionKeypair};
@@ -28,6 +28,8 @@ pub struct AuditReportResponse {
     pub authenticated_account_id: Option<String>,
     pub declared_log_name: Option<String>,
     pub participation_mode: String,
+    #[serde(default)]
+    pub screenshots: Vec<warm_verifier::ScreenshotEvidence>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -94,6 +96,70 @@ fn verify_manifest_file(
     }
 }
 
+fn locate_judge_key(key_path: Option<String>, db_path: &Path) -> Option<EvidenceEncryptionKeypair> {
+    let mut candidates = Vec::new();
+    if let Some(kp) = key_path {
+        candidates.push(PathBuf::from(kp));
+    }
+    if let Some(parent) = db_path.parent() {
+        candidates.push(parent.join("judge_evidence_key.priv"));
+        candidates.push(parent.join("keys").join("judge_evidence_key.priv"));
+        if let Some(gp) = parent.parent() {
+            candidates.push(
+                gp.join("judge")
+                    .join("keys")
+                    .join("judge_evidence_key.priv"),
+            );
+            candidates.push(gp.join("keys").join("judge_evidence_key.priv"));
+        }
+    }
+    candidates.push(PathBuf::from("./keys/judge_evidence_key.priv"));
+    candidates.push(PathBuf::from("../keys/judge_evidence_key.priv"));
+    candidates.push(PathBuf::from("./judge/keys/judge_evidence_key.priv"));
+    candidates.push(PathBuf::from("../judge/keys/judge_evidence_key.priv"));
+    if let Ok(exe) = env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            candidates.push(parent.join("judge_evidence_key.priv"));
+            candidates.push(parent.join("keys").join("judge_evidence_key.priv"));
+            if let Some(gp) = parent.parent() {
+                candidates.push(gp.join("keys").join("judge_evidence_key.priv"));
+            }
+        }
+    }
+    for c in candidates {
+        if c.exists() && c.is_file() {
+            if let Ok(hex_str) = fs::read_to_string(&c) {
+                if let Ok(bytes) = hex::decode(hex_str.trim()) {
+                    if bytes.len() >= 32 {
+                        let mut arr = [0u8; 32];
+                        arr.copy_from_slice(&bytes[..32]);
+                        return Some(EvidenceEncryptionKeypair::from_bytes(arr));
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+#[tauri::command]
+fn pick_evidence_file() -> Option<String> {
+    rfd::FileDialog::new()
+        .set_title("Select Participant Evidence Archive or Database")
+        .add_filter("Warmac Archive & SQLite", &["warmac", "sqlite", "db"])
+        .pick_file()
+        .map(|p| p.display().to_string())
+}
+
+#[tauri::command]
+fn pick_key_file() -> Option<String> {
+    rfd::FileDialog::new()
+        .set_title("Select Judge Private Key")
+        .add_filter("Private Key", &["priv", "key", "txt"])
+        .pick_file()
+        .map(|p| p.display().to_string())
+}
+
 #[tauri::command]
 fn verify_evidence_db(
     db_path: String,
@@ -101,29 +167,56 @@ fn verify_evidence_db(
 ) -> Result<AuditReportResponse, String> {
     let p = PathBuf::from(&db_path);
     if !p.exists() {
-        return Err(format!("Evidence database file not found: {db_path}"));
+        return Err(format!(
+            "Evidence database or archive file not found: {db_path}"
+        ));
     }
 
-    let store = SqliteAuditStore::open(&p).map_err(|e| e.to_string())?;
-
-    let judge_keypair = if let Some(kp) = key_path {
-        let hex_str = fs::read_to_string(&kp).map_err(|e| e.to_string())?;
-        let bytes = hex::decode(hex_str.trim()).map_err(|e| e.to_string())?;
-        let mut arr = [0u8; 32];
-        arr.copy_from_slice(&bytes[..32]);
-        EvidenceEncryptionKeypair::from_bytes(arr)
-    } else {
-        EvidenceEncryptionKeypair::generate()
-    };
-
+    let judge_keypair =
+        locate_judge_key(key_path, &p).unwrap_or_else(EvidenceEncryptionKeypair::generate);
     let policy = MonitoringPolicy::default();
     let verifier = ForensicVerifier::new(policy, judge_keypair);
-    let contest_uuid = Uuid::nil();
-    let participant_id = "participant";
 
-    let report = verifier
-        .audit_store(&store, &contest_uuid, participant_id)
-        .map_err(|e| e.to_string())?;
+    let is_warmac = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.eq_ignore_ascii_case("warmac"))
+        .unwrap_or(false)
+        || {
+            if let Ok(mut f) = fs::File::open(&p) {
+                use std::io::Read;
+                let mut magic = [0u8; 8];
+                f.read_exact(&mut magic).is_ok() && &magic == warm_storage::WARMAC_MAGIC
+            } else {
+                false
+            }
+        };
+
+    let report = if is_warmac {
+        verifier
+            .audit_warmac_archive(&p)
+            .map_err(|e| e.to_string())?
+    } else {
+        let store = SqliteAuditStore::open(&p).map_err(|e| e.to_string())?;
+        let (contest_uuid, participant_id) = if let Some(parent) = p.parent() {
+            if let Ok(manifest) = warm_storage::verify_export_package(parent) {
+                (manifest.contest_uuid, manifest.participant_id)
+            } else if let Ok(events) = store.get_all_events() {
+                if let Some(first) = events.first() {
+                    (first.contest_uuid, first.participant_id.clone())
+                } else {
+                    (Uuid::nil(), "participant".to_string())
+                }
+            } else {
+                (Uuid::nil(), "participant".to_string())
+            }
+        } else {
+            (Uuid::nil(), "participant".to_string())
+        };
+        verifier
+            .audit_store(&store, &contest_uuid, &participant_id)
+            .map_err(|e| e.to_string())?
+    };
 
     let stats = DeterministicAuditEngine::compute_stats(&report);
     let ai = LocalAiSummarizer::summarize(&report);
@@ -151,6 +244,7 @@ fn verify_evidence_db(
         authenticated_account_id: report.authenticated_account_id.map(|u| u.to_string()),
         declared_log_name: report.declared_log_name,
         participation_mode: format!("{:?}", report.participation_mode),
+        screenshots: report.screenshots,
     })
 }
 
@@ -250,13 +344,14 @@ fn main() {
         println!("  warm_judge_app audit [DATABASE_PATH]");
         println!("  warm_judge_app [ui]");
     } else {
-        // Run Desktop GUI via Tauri
         tauri::Builder::default()
             .invoke_handler(tauri::generate_handler![
                 get_judge_version,
                 verify_manifest_file,
                 verify_evidence_db,
-                check_duplicate_accounts
+                check_duplicate_accounts,
+                pick_evidence_file,
+                pick_key_file
             ])
             .run(tauri::generate_context!())
             .expect("Failed to run Warm-AntiCheat Judge Verifier Desktop Application");

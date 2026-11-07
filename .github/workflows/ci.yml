@@ -44,10 +44,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install cargo-audit
-        run: cargo install cargo-audit
-      - name: Run cargo audit
-        run: cargo audit
+      - name: Security audit check
+        uses: rustsec/audit-check@v1.4.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   test:
     name: Test Suite (${{ matrix.os }})
@@ -73,6 +73,21 @@ jobs:
             echo "WARM_BUNDLED_TOOLCHAIN=C:/msys64/ucrt64" >> $GITHUB_ENV
           elif [ -d "C:/msys64/mingw64" ]; then
             echo "WARM_BUNDLED_TOOLCHAIN=C:/msys64/mingw64" >> $GITHUB_ENV
+          fi
+      - name: Install macOS build dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew install gcc || true
+          if [ -d "/opt/homebrew" ]; then
+            if [ -f "/opt/homebrew/bin/g++-14" ]; then
+              ln -sf /opt/homebrew/bin/g++-14 /opt/homebrew/bin/g++ || true
+            fi
+            echo "WARM_BUNDLED_TOOLCHAIN=/opt/homebrew" >> $GITHUB_ENV
+          elif [ -d "/usr/local" ]; then
+            if [ -f "/usr/local/bin/g++-14" ]; then
+              ln -sf /usr/local/bin/g++-14 /usr/local/bin/g++ || true
+            fi
+            echo "WARM_BUNDLED_TOOLCHAIN=/usr/local" >> $GITHUB_ENV
           fi
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable

@@ -17,3 +17,8 @@ anyhow.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 hex.workspace = true
+tar.workspace = true
+rand.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

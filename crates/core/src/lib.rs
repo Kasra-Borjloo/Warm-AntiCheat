@@ -1,5 +1,3 @@
-//! Shared core models, traits, and domain types for Warm-AntiCheat.
-
 pub mod account;
 pub mod contest;
 pub mod error;

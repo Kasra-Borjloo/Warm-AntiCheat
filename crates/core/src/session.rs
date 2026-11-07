@@ -174,9 +174,7 @@ mod tests {
     #[test]
     fn test_invalid_lifecycle_transition() {
         let mut session = CompetitionSession::new("gocup-1", "user-101").unwrap();
-        // Cannot conclude directly from Initialized
         assert!(session.conclude().is_err());
-        // Cannot pause directly from Initialized
         assert!(session.pause().is_err());
     }
 }

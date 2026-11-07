@@ -1,5 +1,3 @@
-//! Security policy configuration and rule definitions.
-
 pub mod apps;
 pub mod browser;
 
@@ -8,7 +6,6 @@ pub use browser::*;
 
 use serde::{Deserialize, Serialize};
 
-/// Comprehensive competition monitoring policy bundle.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MonitoringPolicy {
     pub app_policy: AppPolicy,

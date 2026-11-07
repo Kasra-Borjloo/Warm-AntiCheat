@@ -1,5 +1,3 @@
-//! Competition event definitions and schemas for Warm-AntiCheat.
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -31,7 +29,29 @@ impl std::fmt::Display for EventCategory {
     }
 }
 
-/// Typed payload for OS process events.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EvidenceAttachmentRef {
+    pub attachment_id: Uuid,
+    pub filename: String,
+    pub mime_type: String,
+    pub sha256_hash: String,
+    pub size_bytes: u64,
+    pub captured_at: DateTime<Utc>,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EvidenceAttachment {
+    pub attachment_id: Uuid,
+    pub event_sequence: u64,
+    pub filename: String,
+    pub mime_type: String,
+    pub encrypted_payload: Vec<u8>,
+    pub sha256_hash: String,
+    pub size_bytes: u64,
+    pub captured_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ProcessEventPayload {
     pub pid: u32,
@@ -39,6 +59,10 @@ pub struct ProcessEventPayload {
     pub path: Option<String>,
     pub cmdline: Option<String>,
     pub action: ProcessAction,
+    #[serde(default)]
+    pub screenshot_attachment: Option<EvidenceAttachmentRef>,
+    #[serde(default)]
+    pub listening_ports: Vec<u16>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -48,16 +72,16 @@ pub enum ProcessAction {
     Snapshot,
 }
 
-/// Typed payload for restricted domain browser events.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BrowserEventPayload {
     pub domain: String,
     pub window_title: Option<String>,
     pub browser_exe: Option<String>,
     pub is_restricted: bool,
+    #[serde(default)]
+    pub screenshot_attachment: Option<EvidenceAttachmentRef>,
 }
 
-/// Typed payload for network adapter transitions.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NetworkEventPayload {
     pub interface_name: String,
@@ -75,7 +99,6 @@ pub enum NetworkInterfaceType {
     Other,
 }
 
-/// Typed payload for system lifecycle states.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LifecycleEventPayload {
     pub event_type: LifecycleEventType,
@@ -96,7 +119,6 @@ pub enum LifecycleEventType {
     MonitoringRecovered,
 }
 
-/// Typed payload for built-in C++ compiler attempts and execution results.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CompilerEventPayload {
     pub source_path: String,
@@ -119,8 +141,6 @@ pub struct CompilerEventPayload {
     pub executable_args: Vec<String>,
 }
 
-/// Typed payload for participant authentication events (Mode B).
-/// Plaintext passwords are NEVER logged or recorded.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AuthEventPayload {
     pub action: AuthAction,
@@ -137,7 +157,6 @@ pub enum AuthAction {
     Logout,
 }
 
-/// Strongly typed audit event schema.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AuditEvent {
     pub event_uuid: Uuid,
