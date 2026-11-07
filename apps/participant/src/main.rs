@@ -238,7 +238,7 @@ fn get_potential_removable_roots() -> Vec<PathBuf> {
     #[cfg(target_os = "linux")]
     {
         for base in ["/media", "/run/media", "/mnt"] {
-            let p = Path::new(base);
+            let p = std::path::Path::new(base);
             if p.exists() && p.is_dir() {
                 if let Ok(entries) = fs::read_dir(p) {
                     for entry in entries.flatten() {
@@ -261,7 +261,7 @@ fn get_potential_removable_roots() -> Vec<PathBuf> {
 
     #[cfg(target_os = "macos")]
     {
-        let volumes = Path::new("/Volumes");
+        let volumes = std::path::Path::new("/Volumes");
         if volumes.exists() && volumes.is_dir() {
             if let Ok(entries) = fs::read_dir(volumes) {
                 for entry in entries.flatten() {
