@@ -14,6 +14,85 @@ pub enum EventCategory {
     ManualMarker,
 }
 
+impl std::fmt::Display for EventCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Process => write!(f, "Process"),
+            Self::Browser => write!(f, "Browser"),
+            Self::Network => write!(f, "Network"),
+            Self::SystemLifecycle => write!(f, "SystemLifecycle"),
+            Self::Security => write!(f, "Security"),
+            Self::ManualMarker => write!(f, "ManualMarker"),
+        }
+    }
+}
+
+/// Typed payload for OS process events.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProcessEventPayload {
+    pub pid: u32,
+    pub name: String,
+    pub path: Option<String>,
+    pub cmdline: Option<String>,
+    pub action: ProcessAction,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProcessAction {
+    Started,
+    Terminated,
+    Snapshot,
+}
+
+/// Typed payload for restricted domain browser events.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BrowserEventPayload {
+    pub domain: String,
+    pub window_title: Option<String>,
+    pub browser_exe: Option<String>,
+    pub is_restricted: bool,
+}
+
+/// Typed payload for network adapter transitions.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NetworkEventPayload {
+    pub interface_name: String,
+    pub interface_type: NetworkInterfaceType,
+    pub is_connected: bool,
+    pub ssid: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NetworkInterfaceType {
+    WiFi,
+    Ethernet,
+    Loopback,
+    Virtual,
+    Other,
+}
+
+/// Typed payload for system lifecycle states.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LifecycleEventPayload {
+    pub event_type: LifecycleEventType,
+    pub details: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LifecycleEventType {
+    ApplicationLaunch,
+    ApplicationExit,
+    SessionStart,
+    SessionEnd,
+    Heartbeat,
+    SleepDetected,
+    WakeDetected,
+    ShutdownSignal,
+    MonitoringInterrupted,
+    MonitoringRecovered,
+}
+
+/// Strongly typed audit event schema.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AuditEvent {
     pub event_uuid: Uuid,
@@ -26,4 +105,31 @@ pub struct AuditEvent {
     pub sequence_number: u64,
     pub previous_event_hash: String,
     pub current_event_hash: String,
+}
+
+impl AuditEvent {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        contest_uuid: Uuid,
+        participant_id: impl Into<String>,
+        session_id: Uuid,
+        category: EventCategory,
+        payload: serde_json::Value,
+        sequence_number: u64,
+        previous_event_hash: impl Into<String>,
+        current_event_hash: impl Into<String>,
+    ) -> Self {
+        Self {
+            event_uuid: Uuid::new_v4(),
+            contest_uuid,
+            participant_id: participant_id.into(),
+            session_id,
+            timestamp: Utc::now(),
+            category,
+            payload,
+            sequence_number,
+            previous_event_hash: previous_event_hash.into(),
+            current_event_hash: current_event_hash.into(),
+        }
+    }
 }
