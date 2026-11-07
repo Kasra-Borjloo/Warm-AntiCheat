@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 use sysinfo::Networks;
 use warm_events::{NetworkEventPayload, NetworkInterfaceType};
 
@@ -8,6 +9,7 @@ pub struct NetworkCollector {
     last_wifi_connected: Option<bool>,
     last_wifi_ssid: Option<String>,
     last_wifi_bssid: Option<String>,
+    last_wifi_poll: Instant,
 }
 
 impl Default for NetworkCollector {
@@ -36,33 +38,37 @@ impl NetworkCollector {
             last_wifi_connected: wifi_conn,
             last_wifi_ssid: wifi_ssid,
             last_wifi_bssid: wifi_bssid,
+            last_wifi_poll: Instant::now(),
         }
     }
 
     pub fn poll_events(&mut self) -> Vec<NetworkEventPayload> {
         let mut events = Vec::new();
 
-        let (wifi_conn, wifi_ssid, wifi_bssid) = Self::query_current_wifi();
-        if wifi_conn.is_some()
-            && (wifi_conn != self.last_wifi_connected
-                || wifi_ssid != self.last_wifi_ssid
-                || wifi_bssid != self.last_wifi_bssid)
-        {
-            let is_connected = wifi_conn.unwrap_or(false);
-            self.last_wifi_connected = wifi_conn;
-            self.last_wifi_ssid = wifi_ssid.clone();
-            self.last_wifi_bssid = wifi_bssid;
+        if self.last_wifi_poll.elapsed() >= Duration::from_secs(10) {
+            self.last_wifi_poll = Instant::now();
+            let (wifi_conn, wifi_ssid, wifi_bssid) = Self::query_current_wifi();
+            if wifi_conn.is_some()
+                && (wifi_conn != self.last_wifi_connected
+                    || wifi_ssid != self.last_wifi_ssid
+                    || wifi_bssid != self.last_wifi_bssid)
+            {
+                let is_connected = wifi_conn.unwrap_or(false);
+                self.last_wifi_connected = wifi_conn;
+                self.last_wifi_ssid = wifi_ssid.clone();
+                self.last_wifi_bssid = wifi_bssid;
 
-            events.push(NetworkEventPayload {
-                interface_name: "Wi-Fi".to_string(),
-                interface_type: NetworkInterfaceType::WiFi,
-                is_connected,
-                ssid: if is_connected {
-                    wifi_ssid.or_else(|| Some("Wi-Fi Network".to_string()))
-                } else {
-                    None
-                },
-            });
+                events.push(NetworkEventPayload {
+                    interface_name: "Wi-Fi".to_string(),
+                    interface_type: NetworkInterfaceType::WiFi,
+                    is_connected,
+                    ssid: if is_connected {
+                        wifi_ssid.or_else(|| Some("Wi-Fi Network".to_string()))
+                    } else {
+                        None
+                    },
+                });
+            }
         }
 
         self.networks.refresh();
@@ -97,11 +103,11 @@ impl NetworkCollector {
 
     #[cfg(target_os = "windows")]
     fn query_current_wifi() -> (Option<bool>, Option<String>, Option<String>) {
+        use std::os::windows::process::CommandExt;
         use std::process::Command;
-        let output = match Command::new("netsh")
-            .args(["wlan", "show", "interfaces"])
-            .output()
-        {
+        let mut cmd = Command::new("netsh");
+        cmd.creation_flags(0x08000000);
+        let output = match cmd.args(["wlan", "show", "interfaces"]).output() {
             Ok(out) if out.status.success() => out,
             _ => return (None, None, None),
         };
@@ -140,7 +146,7 @@ impl NetworkCollector {
     pub fn simulate_event(
         &mut self,
         interface_name: &str,
-        iface_type: NetworkInterfaceType,
+        interface_type: NetworkInterfaceType,
         is_connected: bool,
         ssid: Option<String>,
     ) -> NetworkEventPayload {
@@ -148,20 +154,38 @@ impl NetworkCollector {
             .insert(interface_name.to_string(), is_connected);
         NetworkEventPayload {
             interface_name: interface_name.to_string(),
-            interface_type: iface_type,
+            interface_type,
             is_connected,
             ssid,
         }
     }
 }
 
-pub fn classify_interface_name(name: &str) -> NetworkInterfaceType {
+fn classify_interface_name(name: &str) -> NetworkInterfaceType {
     let lower = name.to_lowercase();
-    if lower.contains("vethernet") || lower.contains("vbox") || lower.contains("vmnet") {
+    if lower.contains("vethernet")
+        || lower.contains("virtual")
+        || lower.contains("vmware")
+        || lower.contains("vbox")
+        || lower.contains("wsl")
+        || lower.contains("vpn")
+        || lower.contains("tun")
+        || lower.contains("tap")
+        || lower.contains("wireguard")
+        || lower.contains("tailscale")
+    {
         NetworkInterfaceType::Virtual
-    } else if lower.contains("wi-fi") || lower.contains("wlan") || lower.contains("wireless") {
+    } else if lower.contains("wi-fi")
+        || lower.contains("wifi")
+        || lower.contains("wlan")
+        || lower.contains("wireless")
+    {
         NetworkInterfaceType::WiFi
-    } else if lower.contains("eth") || lower.contains("ethernet") || lower.contains("en0") {
+    } else if lower.contains("ethernet")
+        || lower.contains("eth")
+        || lower.contains("en0")
+        || lower.contains("lan")
+    {
         NetworkInterfaceType::Ethernet
     } else if lower.contains("loopback") || lower.contains("lo") {
         NetworkInterfaceType::Loopback

@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use warm_core::{Contest, Result, WarmError};
 use warm_crypto::{
     compute_fingerprint, sha256_digest, EvidenceEncryptionKeypair, ManifestSigningKeypair,
@@ -133,6 +133,84 @@ fn locate_judge_binary() -> Option<PathBuf> {
     candidates.into_iter().find(|c| c.exists() && c.is_file())
 }
 
+fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(&entry.path(), &dst.join(entry.file_name()))?;
+        } else {
+            let _ = fs::copy(entry.path(), dst.join(entry.file_name()));
+        }
+    }
+    Ok(())
+}
+
+fn locate_bundled_toolchain() -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+
+    if let Ok(p) = std::env::var("WARM_BUNDLED_TOOLCHAIN") {
+        candidates.push(PathBuf::from(p));
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("toolchain"));
+            candidates.push(dir.join("bin/toolchain"));
+            candidates.push(dir.join("../toolchain"));
+            candidates.push(dir.join("../../toolchain"));
+        }
+    }
+
+    candidates.push(PathBuf::from("./toolchain"));
+    candidates.push(PathBuf::from("./bin/toolchain"));
+    candidates.push(PathBuf::from("../toolchain"));
+    candidates.push(PathBuf::from("../../toolchain"));
+
+    #[cfg(target_os = "windows")]
+    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+        let local_path = PathBuf::from(&local_app_data);
+        candidates.push(local_path.join("WarmAntiCheat/toolchain"));
+        let winget_dir = local_path.join("Microsoft/WinGet/Packages");
+        if winget_dir.exists() {
+            if let Ok(entries) = fs::read_dir(&winget_dir) {
+                for entry in entries.flatten() {
+                    let ep = entry.path();
+                    if ep.join("mingw64/bin").exists() {
+                        candidates.push(ep.join("mingw64"));
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        candidates.push(PathBuf::from("C:\\w64devkit"));
+        candidates.push(PathBuf::from("C:\\winlibs"));
+        candidates.push(PathBuf::from("C:\\mingw64"));
+        candidates.push(PathBuf::from("C:\\msys64\\ucrt64"));
+        candidates.push(PathBuf::from("C:\\msys64\\mingw64"));
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Ok(home) = std::env::var("HOME") {
+            candidates.push(PathBuf::from(home).join(".local/share/WarmAntiCheat/toolchain"));
+        }
+        candidates.push(PathBuf::from("/usr"));
+        candidates.push(PathBuf::from("/opt/gcc"));
+    }
+
+    candidates.into_iter().find(|c| {
+        c.join("bin/g++.exe").exists()
+            || c.join("bin/g++").exists()
+            || c.join("g++.exe").exists()
+            || c.join("g++").exists()
+    })
+}
+
 pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<ContestDistBundle> {
     let contest = Contest::with_times(
         &config.title,
@@ -198,7 +276,17 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
 
     if config.enable_cpp_compiler {
         let toolchain_dir = client_dir.join("toolchain");
+        let toolchain_win_dir = client_win_dir.join("toolchain");
+        let toolchain_linux_dir = client_linux_dir.join("toolchain");
         let _ = fs::create_dir_all(&toolchain_dir);
+        let _ = fs::create_dir_all(&toolchain_win_dir);
+        let _ = fs::create_dir_all(&toolchain_linux_dir);
+
+        if let Some(src_toolchain) = locate_bundled_toolchain() {
+            let _ = copy_dir_all(&src_toolchain, &toolchain_win_dir);
+            let _ = copy_dir_all(&src_toolchain, &toolchain_dir);
+        }
+
         let spec_file = toolchain_dir.join("toolchain_manifest.json");
         let spec_json = serde_json::json!({
             "name": "GNU GCC / G++ C++23 Toolchain",
@@ -210,6 +298,10 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
         });
         let _ = fs::write(
             &spec_file,
+            serde_json::to_string_pretty(&spec_json).unwrap(),
+        );
+        let _ = fs::write(
+            toolchain_win_dir.join("toolchain_manifest.json"),
             serde_json::to_string_pretty(&spec_json).unwrap(),
         );
     }

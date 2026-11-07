@@ -6,6 +6,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use warm_crypto::sha256_digest;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ToolchainSpec {
     pub name: String,
@@ -83,20 +86,69 @@ impl BundledToolchain {
         if let Ok(exe_path) = env::current_exe() {
             if let Some(parent) = exe_path.parent() {
                 candidates.push(parent.join("toolchain"));
+                candidates.push(parent.join("bin").join("toolchain"));
                 candidates.push(parent.join("../toolchain"));
                 candidates.push(parent.join("../../toolchain"));
+                candidates.push(parent.join("client/windows/toolchain"));
+                candidates.push(parent.join("client/linux/toolchain"));
+                candidates.push(parent.join("client/macos/toolchain"));
+                candidates.push(parent.join("client/toolchain"));
                 candidates.push(parent.to_path_buf());
             }
         }
 
         candidates.push(PathBuf::from("./toolchain"));
+        candidates.push(PathBuf::from("./bin/toolchain"));
         candidates.push(PathBuf::from("../toolchain"));
+        candidates.push(PathBuf::from("./client/windows/toolchain"));
+        candidates.push(PathBuf::from("./client/linux/toolchain"));
+        candidates.push(PathBuf::from("./client/macos/toolchain"));
         candidates.push(PathBuf::from("./client/toolchain"));
         candidates.push(PathBuf::from("./bin"));
 
         #[cfg(target_os = "windows")]
+        if let Ok(local_app_data) = env::var("LOCALAPPDATA") {
+            let local_path = PathBuf::from(&local_app_data);
+            candidates.push(local_path.join("WarmAntiCheat/toolchain"));
+            candidates.push(local_path.join("Programs/WarmAntiCheat/toolchain"));
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        if let Ok(home) = env::var("HOME") {
+            candidates.push(PathBuf::from(home).join(".local/share/WarmAntiCheat/toolchain"));
+            candidates.push(
+                PathBuf::from(home).join("Library/Application Support/WarmAntiCheat/toolchain"),
+            );
+        }
+
+        for c in &candidates {
+            let probe_bin = if cfg!(target_os = "windows") {
+                c.join("bin").join("g++.exe")
+            } else {
+                c.join("bin").join("g++")
+            };
+            if probe_bin.exists() {
+                return Ok((c.clone(), probe_bin));
+            }
+
+            let probe_direct = if cfg!(target_os = "windows") {
+                c.join("g++.exe")
+            } else {
+                c.join("g++")
+            };
+            if probe_direct.exists() {
+                let root = c.parent().unwrap_or(c).to_path_buf();
+                return Ok((root, probe_direct));
+            }
+        }
+
+        let mut fallback_candidates = Vec::new();
+
+        #[cfg(target_os = "windows")]
         {
-            if let Ok(output) = Command::new("where.exe").arg("g++").output() {
+            let mut where_cmd = Command::new("where.exe");
+            where_cmd.creation_flags(0x08000000);
+            if let Ok(output) = where_cmd.arg("g++").output() {
                 if output.status.success() {
                     let out_str = String::from_utf8_lossy(&output.stdout);
                     for line in out_str.lines() {
@@ -105,9 +157,9 @@ impl BundledToolchain {
                             let p = PathBuf::from(trimmed);
                             if p.exists() {
                                 if let Some(bin_dir) = p.parent() {
-                                    candidates.push(bin_dir.to_path_buf());
+                                    fallback_candidates.push(bin_dir.to_path_buf());
                                     if let Some(root_dir) = bin_dir.parent() {
-                                        candidates.push(root_dir.to_path_buf());
+                                        fallback_candidates.push(root_dir.to_path_buf());
                                     }
                                 }
                             }
@@ -120,9 +172,9 @@ impl BundledToolchain {
                 for part in path_var.split(';') {
                     let p = PathBuf::from(part.trim());
                     if p.exists() {
-                        candidates.push(p.clone());
+                        fallback_candidates.push(p.clone());
                         if let Some(parent) = p.parent() {
-                            candidates.push(parent.to_path_buf());
+                            fallback_candidates.push(parent.to_path_buf());
                         }
                     }
                 }
@@ -130,40 +182,33 @@ impl BundledToolchain {
 
             if let Ok(local_app_data) = env::var("LOCALAPPDATA") {
                 let local_path = PathBuf::from(&local_app_data);
-                candidates.push(local_path.join("WarmAntiCheat/toolchain"));
-                candidates.push(local_path.join("Programs/Common/MinGW"));
-
                 let winget_dir = local_path.join("Microsoft/WinGet/Packages");
                 if winget_dir.exists() {
                     if let Ok(entries) = fs::read_dir(&winget_dir) {
                         for entry in entries.flatten() {
                             let ep = entry.path();
                             if ep.is_dir() {
-                                candidates.push(ep.join("mingw64"));
-                                candidates.push(ep.join("mingw32"));
-                                candidates.push(ep.join("bin"));
-                                candidates.push(ep);
+                                fallback_candidates.push(ep.join("mingw64"));
+                                fallback_candidates.push(ep.join("mingw32"));
+                                fallback_candidates.push(ep.join("bin"));
+                                fallback_candidates.push(ep);
                             }
                         }
                     }
                 }
             }
 
-            candidates.push(PathBuf::from("C:\\mingw"));
-            candidates.push(PathBuf::from("C:\\MinGW"));
-            candidates.push(PathBuf::from("C:\\mingw64"));
-            candidates.push(PathBuf::from("C:\\MinGW64"));
-            candidates.push(PathBuf::from("C:\\mingw-w64"));
-            candidates.push(PathBuf::from("C:\\msys64\\ucrt64"));
-            candidates.push(PathBuf::from("C:\\msys64\\mingw64"));
-            candidates.push(PathBuf::from("C:\\msys64\\clang64"));
-            candidates.push(PathBuf::from("C:\\w64devkit"));
-            candidates.push(PathBuf::from("C:\\Program Files\\CodeBlocks\\MinGW"));
-            candidates.push(PathBuf::from("C:\\Program Files (x86)\\CodeBlocks\\MinGW"));
-            candidates.push(PathBuf::from("C:\\Dev-Cpp\\MinGW64"));
-            candidates.push(PathBuf::from("C:\\TDM-GCC-64"));
-            candidates.push(PathBuf::from("C:\\winlibs"));
-            candidates.push(PathBuf::from("C:\\winlibs-x86_64"));
+            fallback_candidates.push(PathBuf::from("C:\\mingw"));
+            fallback_candidates.push(PathBuf::from("C:\\MinGW"));
+            fallback_candidates.push(PathBuf::from("C:\\mingw64"));
+            fallback_candidates.push(PathBuf::from("C:\\MinGW64"));
+            fallback_candidates.push(PathBuf::from("C:\\mingw-w64"));
+            fallback_candidates.push(PathBuf::from("C:\\msys64\\ucrt64"));
+            fallback_candidates.push(PathBuf::from("C:\\msys64\\mingw64"));
+            fallback_candidates.push(PathBuf::from("C:\\msys64\\clang64"));
+            fallback_candidates.push(PathBuf::from("C:\\w64devkit"));
+            fallback_candidates.push(PathBuf::from("C:\\winlibs"));
+            fallback_candidates.push(PathBuf::from("C:\\winlibs-x86_64"));
         }
 
         #[cfg(not(target_os = "windows"))]
@@ -175,9 +220,9 @@ impl BundledToolchain {
                     if !trimmed.is_empty() {
                         let p = PathBuf::from(trimmed);
                         if let Some(bin_dir) = p.parent() {
-                            candidates.push(bin_dir.to_path_buf());
+                            fallback_candidates.push(bin_dir.to_path_buf());
                             if let Some(root_dir) = bin_dir.parent() {
-                                candidates.push(root_dir.to_path_buf());
+                                fallback_candidates.push(root_dir.to_path_buf());
                             }
                         }
                     }
@@ -188,27 +233,23 @@ impl BundledToolchain {
                 for part in path_var.split(':') {
                     let p = PathBuf::from(part.trim());
                     if p.exists() {
-                        candidates.push(p.clone());
+                        fallback_candidates.push(p.clone());
                         if let Some(parent) = p.parent() {
-                            candidates.push(parent.to_path_buf());
+                            fallback_candidates.push(parent.to_path_buf());
                         }
                     }
                 }
             }
 
-            if let Ok(home) = env::var("HOME") {
-                candidates.push(PathBuf::from(home).join(".local/share/WarmAntiCheat/toolchain"));
-            }
-
-            candidates.push(PathBuf::from("/usr"));
-            candidates.push(PathBuf::from("/usr/local"));
-            candidates.push(PathBuf::from("/opt/gcc"));
-            candidates.push(PathBuf::from("/opt"));
-            candidates.push(PathBuf::from("/opt/homebrew"));
-            candidates.push(PathBuf::from("/run/current-system/sw"));
+            fallback_candidates.push(PathBuf::from("/usr"));
+            fallback_candidates.push(PathBuf::from("/usr/local"));
+            fallback_candidates.push(PathBuf::from("/opt/gcc"));
+            fallback_candidates.push(PathBuf::from("/opt"));
+            fallback_candidates.push(PathBuf::from("/opt/homebrew"));
+            fallback_candidates.push(PathBuf::from("/run/current-system/sw"));
         }
 
-        for c in &candidates {
+        for c in &fallback_candidates {
             let probe_bin = if cfg!(target_os = "windows") {
                 c.join("bin").join("g++.exe")
             } else {
@@ -244,6 +285,7 @@ impl BundledToolchain {
 
         #[cfg(target_os = "windows")]
         {
+            cmd.creation_flags(0x08000000);
             let isolated_path = format!("{};C:\\Windows\\System32", bin_dir.display());
             cmd.env("PATH", isolated_path);
         }
@@ -278,10 +320,13 @@ impl BundledToolchain {
             let mut dump_cmd = Command::new(gxx_binary);
             dump_cmd.arg("-dumpversion");
             #[cfg(target_os = "windows")]
-            dump_cmd.env(
-                "PATH",
-                format!("{};C:\\Windows\\System32", bin_dir.display()),
-            );
+            {
+                dump_cmd.creation_flags(0x08000000);
+                dump_cmd.env(
+                    "PATH",
+                    format!("{};C:\\Windows\\System32", bin_dir.display()),
+                );
+            }
             if let Ok(v) = dump_cmd.output() {
                 version = String::from_utf8_lossy(&v.stdout).trim().to_string();
             }
@@ -315,6 +360,9 @@ int main() {
 
         for std_flag in &["c++23", "c++2b", "c++20"] {
             let mut cmd = Command::new(gxx_binary);
+            #[cfg(target_os = "windows")]
+            cmd.creation_flags(0x08000000);
+
             cmd.arg(format!("-std={std_flag}"))
                 .arg("-O2")
                 .arg("-pipe")
@@ -349,6 +397,9 @@ int main() {
 
         for std_flag in &["c++23", "c++2b", "c++20"] {
             let mut cmd = Command::new(gxx_binary);
+            #[cfg(target_os = "windows")]
+            cmd.creation_flags(0x08000000);
+
             cmd.arg(format!("-std={std_flag}"))
                 .arg("-O2")
                 .arg("-pipe")

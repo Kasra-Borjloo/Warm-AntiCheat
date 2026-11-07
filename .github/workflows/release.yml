@@ -65,6 +65,13 @@ jobs:
           Copy-Item target/${{ matrix.target }}/release/warm_participant_app.exe staging/bin/warm_participant_app.exe
           Copy-Item target/${{ matrix.target }}/release/warm_judge_app.exe staging/bin/warm_judge_app.exe
           Copy-Item assets/windows/x64/WebView2Loader.dll staging/bin/WebView2Loader.dll
+
+          $tcUrl = "https://github.com/skeeto/w64devkit/releases/download/v2.11.0/w64devkit-x64-2.11.0.7z.exe"
+          Invoke-WebRequest -Uri $tcUrl -OutFile w64devkit.7z.exe
+          7z x w64devkit.7z.exe -o"staging_tc"
+          Move-Item staging_tc/w64devkit staging/bin/toolchain
+          Copy-Item -Recurse staging/bin/toolchain staging/toolchain
+
           Copy-Item README.md staging/
           Copy-Item LICENSE staging/
           Compress-Archive -Path staging/* -DestinationPath ${{ matrix.artifact_name }}
@@ -80,6 +87,13 @@ jobs:
           cp target/${{ matrix.target }}/release/warm_judge_app staging/bin/warm_judge_app
           chmod +x staging/bin/warm_judge_app
           chmod +x staging/warm-contest-maker
+
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            mkdir -p staging/bin/toolchain staging/toolchain
+            curl -sL https://musl.cc/x86_64-linux-musl-native.tgz | tar -xz -C staging/bin/toolchain --strip-components=1
+            cp -r staging/bin/toolchain/* staging/toolchain/
+          fi
+
           cp README.md staging/
           cp LICENSE staging/
           tar -czvf ${{ matrix.artifact_name }} -C staging .
@@ -125,7 +139,7 @@ jobs:
               return { sha256: parts[0], path: parts[1] };
             });
             const manifest = {
-              release: process.env.GITHUB_REF_NAME || "v0.6.0",
+              release: process.env.GITHUB_REF_NAME || "v0.7.0",
               project: "Warm-AntiCheat",
               timestamp: new Date().toISOString(),
               artifacts,
@@ -149,7 +163,7 @@ jobs:
             fs.writeFileSync("release-manifest.json", JSON.stringify(manifest, null, 2));
           '
 
-          echo '{"spdxVersion":"SPDX-2.3","name":"Warm-AntiCheat","packages":[{"name":"warm-anticheat","versionInfo":"0.6.0","licenseConcluded":"GPL-3.0-only"}]}' > sbom.spdx.json
+          echo '{"spdxVersion":"SPDX-2.3","name":"Warm-AntiCheat","packages":[{"name":"warm-anticheat","versionInfo":"0.7.0","licenseConcluded":"GPL-3.0-only"}]}' > sbom.spdx.json
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
