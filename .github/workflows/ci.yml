@@ -79,17 +79,14 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install gcc || true
-          if [ -d "/opt/homebrew" ]; then
-            if [ -f "/opt/homebrew/bin/g++-14" ]; then
-              ln -sf /opt/homebrew/bin/g++-14 /opt/homebrew/bin/g++ || true
+          for bin in /opt/homebrew/bin/g++-* /usr/local/bin/g++-*; do
+            if [ -x "$bin" ]; then
+              target_dir=$(dirname "$bin")
+              ln -sf "$bin" "$target_dir/g++" || true
+              echo "WARM_BUNDLED_TOOLCHAIN=$(dirname "$target_dir")" >> $GITHUB_ENV
+              break
             fi
-            echo "WARM_BUNDLED_TOOLCHAIN=/opt/homebrew" >> $GITHUB_ENV
-          elif [ -d "/usr/local" ]; then
-            if [ -f "/usr/local/bin/g++-14" ]; then
-              ln -sf /usr/local/bin/g++-14 /usr/local/bin/g++ || true
-            fi
-            echo "WARM_BUNDLED_TOOLCHAIN=/usr/local" >> $GITHUB_ENV
-          fi
+          done
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Run full test suite
