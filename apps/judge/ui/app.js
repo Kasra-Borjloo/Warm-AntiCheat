@@ -25,7 +25,7 @@ const participantsData = {
     },
     timeline: [
       { seq: 1, time: '2026-11-07T09:00:00Z', cat: 'Auth', details: 'Participant Login: Username GOCUP-001 (Argon2id offline verification success)', hash: 'a101...99f' },
-      { seq: 2, time: '2026-11-07T09:00:05Z', cat: 'SystemLifecycle', details: 'ApplicationLaunch: Warm-AntiCheat v0.4.0 on Windows', hash: 'e291...3a1' },
+      { seq: 2, time: '2026-11-07T09:00:05Z', cat: 'SystemLifecycle', details: 'ApplicationLaunch: Warm-AntiCheat v0.5.0 on Windows', hash: 'e291...3a1' },
       { seq: 3, time: '2026-11-07T09:00:10Z', cat: 'Network', details: 'Connected to WiFi: "Sharif-Guest" (Interface: wlan0)', hash: 'a149...8c2' },
       { seq: 4, time: '2026-11-07T09:00:15Z', cat: 'SystemLifecycle', details: 'Heartbeat tick #1 (All monitors operational)', hash: '9b04...5f7' },
       { seq: 5, time: '2026-11-07T09:00:20Z', cat: 'Process', details: 'Process started: code.exe (PID: 4120)', hash: '4cb1...210' },
@@ -79,7 +79,7 @@ const participantsData = {
       ]
     },
     timeline: [
-      { seq: 1, time: '2026-11-07T09:05:00Z', cat: 'SystemLifecycle', details: 'ApplicationLaunch: Warm-AntiCheat v0.4.0 on Linux', hash: '7c82...01e' },
+      { seq: 1, time: '2026-11-07T09:05:00Z', cat: 'SystemLifecycle', details: 'ApplicationLaunch: Warm-AntiCheat v0.5.0 on Linux', hash: '7c82...01e' },
       { seq: 44, time: '2026-11-07T10:15:32Z', cat: 'Process', details: 'CRITICAL: Prohibited application executed: ollama.exe (PID: 8840)', hash: 'f91b...bb7' }
     ],
     compilerActivity: []

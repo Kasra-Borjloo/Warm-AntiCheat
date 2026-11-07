@@ -46,7 +46,10 @@
 
         <div class="form-group mt-2">
           <label for="loginPassword">8-Character Password *</label>
-          <input type="password" id="loginPassword" placeholder="Enter assigned 8-character password" maxlength="16" autocomplete="current-password">
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="password" id="loginPassword" placeholder="Enter assigned 8-character password" maxlength="32" autocomplete="current-password" style="flex: 1;">
+            <button type="button" class="btn btn-secondary" id="togglePasswordBtn" style="white-space: nowrap; padding: 0.5rem 0.75rem;">Show</button>
+          </div>
         </div>
 
         <div id="loginError" class="callout mt-2" style="display: none; background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; color: #f87171;">
@@ -303,7 +306,7 @@ int main() {
     </div>
   </div>
 
-  <div id="exportModalOverlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; display: flex; align-items: center; justify-content: center;">
+  <div id="exportModalOverlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
     <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; width: 90%; max-width: 440px; padding: 1.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
       <h3 style="margin-top: 0; color: #f8fafc; display: flex; align-items: center; gap: 0.5rem;">
         <span data-lucide="download" data-size="20"></span>

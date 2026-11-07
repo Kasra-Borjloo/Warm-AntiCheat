@@ -272,7 +272,7 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
                 copied_participant_client = Some(win_exe_target);
 
                 let bat_content =
-                    "@echo off\r\nstart \"\" \"%~dp0Warm-AntiCheat-Participant.exe\"\r\n";
+                    "@echo off\r\ncd /d \"%~dp0\"\r\nstart \"\" \"%~dp0Warm-AntiCheat-Participant.exe\"\r\n";
                 let _ = fs::write(client_win_dir.join("Run-Contest.bat"), bat_content);
                 let _ = fs::write(
                     client_win_dir.join("WebView2Loader.dll"),
@@ -301,7 +301,7 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
             if is_pe {
                 let win_judge_target = judge_dir.join("Warm-AntiCheat-Judge.exe");
                 let _ = fs::write(&win_judge_target, &judge_bytes);
-                let bat_content = "@echo off\r\nstart \"\" \"%~dp0Warm-AntiCheat-Judge.exe\"\r\n";
+                let bat_content = "@echo off\r\ncd /d \"%~dp0\"\r\nstart \"\" \"%~dp0Warm-AntiCheat-Judge.exe\"\r\n";
                 let _ = fs::write(judge_dir.join("Launch-Judge.bat"), bat_content);
                 let _ = fs::write(judge_dir.join("WebView2Loader.dll"), WEBVIEW2_LOADER_X64);
             } else {

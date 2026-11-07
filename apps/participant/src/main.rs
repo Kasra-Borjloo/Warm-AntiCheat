@@ -849,7 +849,7 @@ fn get_participation_mode() -> ParticipationModeResponse {
 
 #[tauri::command]
 fn login_participant_account(
-    contest_id: String,
+    _contest_id: String,
     username: String,
     password: String,
 ) -> Result<LoginResponse, String> {
@@ -861,25 +861,37 @@ fn login_participant_account(
     let manifest = locate_and_load_manifest()
         .ok_or_else(|| "Contest configuration manifest not found or invalid.".to_string())?;
 
-    if !contest_id.is_empty() && contest_id != manifest.manifest.contest.id {
-        FAILED_ATTEMPTS.fetch_add(1, Ordering::SeqCst);
-        return Err("Invalid credentials".to_string());
-    }
-
     if manifest.manifest.account_mode.mode != ParticipationMode::GeneratedAccounts {
         return Err("Contest is not configured for account authentication".to_string());
     }
 
-    let target = manifest
-        .manifest
-        .account_mode
-        .verifiers
-        .iter()
-        .find(|v| v.username.eq_ignore_ascii_case(&username));
+    let clean_user = username.trim();
+    let clean_pass = password.trim();
+
+    let target = manifest.manifest.account_mode.verifiers.iter().find(|v| {
+        if v.username.eq_ignore_ascii_case(clean_user) {
+            return true;
+        }
+        let norm_v = v.username.replace(['_', ' '], "-").to_ascii_uppercase();
+        let norm_u = clean_user.replace(['_', ' '], "-").to_ascii_uppercase();
+        if norm_v == norm_u {
+            return true;
+        }
+        if let Ok(num) = clean_user
+            .trim_start_matches(['#', 'u', 'U'])
+            .parse::<usize>()
+        {
+            let target_suffix = format!("-{:03}", num);
+            if v.username.ends_with(&target_suffix) {
+                return true;
+            }
+        }
+        false
+    });
 
     match target {
         Some(v) => {
-            if warm_crypto::verify_password(&password, &v.password_hash) {
+            if warm_crypto::verify_password(clean_pass, &v.password_hash) {
                 FAILED_ATTEMPTS.store(0, Ordering::SeqCst);
                 *PENDING_AUTH.lock().unwrap() = Some((v.account_id, v.username.clone()));
                 Ok(LoginResponse {
@@ -890,16 +902,16 @@ fn login_participant_account(
                 })
             } else {
                 FAILED_ATTEMPTS.fetch_add(1, Ordering::SeqCst);
-                Err("Invalid credentials".to_string())
+                Err("Invalid credentials: password does not match account".to_string())
             }
         }
         None => {
             let _ = warm_crypto::verify_password(
-                &password,
+                clean_pass,
                 "$argon2id$v=19$m=19456,t=2,p=1$M29ja19zYWx0XzEyMzQ1$MockHashComparisonForConstantTimeDummyPass12345",
             );
             FAILED_ATTEMPTS.fetch_add(1, Ordering::SeqCst);
-            Err("Invalid credentials".to_string())
+            Err("Invalid credentials: username not found in contest roster".to_string())
         }
     }
 }

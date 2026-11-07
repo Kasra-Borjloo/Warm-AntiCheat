@@ -7,7 +7,7 @@ const state = {
   timerInterval: null,
   requiresLogin: false,
   authenticatedAccountId: null,
-  contestId: 'gocup-1'
+  contestId: ''
 };
 
 const windowTitle = document.getElementById('windowTitle');
@@ -33,12 +33,28 @@ const loginError = document.getElementById('loginError');
 const loginErrorText = document.getElementById('loginErrorText');
 
 const exportModalOverlay = document.getElementById('exportModalOverlay');
+if (exportModalOverlay) {
+  exportModalOverlay.style.display = 'none';
+}
 const modalLogNameInput = document.getElementById('modalLogNameInput');
 const modalLogNameError = document.getElementById('modalLogNameError');
 const modalCancelBtn = document.getElementById('modalCancelBtn');
 const modalConfirmExportBtn = document.getElementById('modalConfirmExportBtn');
 const loginNoticeAck = document.getElementById('loginNoticeAck');
 const enrollNoticeAck = document.getElementById('enrollNoticeAck');
+const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+
+if (togglePasswordBtn && loginPasswordInput) {
+  togglePasswordBtn.addEventListener('click', () => {
+    if (loginPasswordInput.type === 'password') {
+      loginPasswordInput.type = 'text';
+      togglePasswordBtn.textContent = 'Hide';
+    } else {
+      loginPasswordInput.type = 'password';
+      togglePasswordBtn.textContent = 'Show';
+    }
+  });
+}
 
 if (loginNoticeAck) {
   loginNoticeAck.addEventListener('change', () => {
