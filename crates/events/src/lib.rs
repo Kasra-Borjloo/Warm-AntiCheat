@@ -13,6 +13,7 @@ pub enum EventCategory {
     Security,
     ManualMarker,
     Compiler,
+    Auth,
 }
 
 impl std::fmt::Display for EventCategory {
@@ -25,6 +26,7 @@ impl std::fmt::Display for EventCategory {
             Self::Security => write!(f, "Security"),
             Self::ManualMarker => write!(f, "ManualMarker"),
             Self::Compiler => write!(f, "Compiler"),
+            Self::Auth => write!(f, "Auth"),
         }
     }
 }
@@ -115,6 +117,24 @@ pub struct CompilerEventPayload {
     pub resource_violations: Option<String>,
     pub execution_error: Option<String>,
     pub executable_args: Vec<String>,
+}
+
+/// Typed payload for participant authentication events (Mode B).
+/// Plaintext passwords are NEVER logged or recorded.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AuthEventPayload {
+    pub action: AuthAction,
+    pub username: String,
+    pub account_id: Option<Uuid>,
+    pub timestamp: DateTime<Utc>,
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AuthAction {
+    LoginSuccess,
+    LoginFailure,
+    Logout,
 }
 
 /// Strongly typed audit event schema.

@@ -25,6 +25,10 @@ pub struct ContestBuildConfig {
     pub output_base_dir: PathBuf,
     #[serde(default)]
     pub enable_cpp_compiler: bool,
+    #[serde(default)]
+    pub participation_mode: warm_core::ParticipationMode,
+    #[serde(default)]
+    pub account_count: usize,
 }
 
 /// Result returned after successful contest distribution package generation.
@@ -122,7 +126,38 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
         );
     }
 
-    // 3. Create manifest and sign with organizer private key
+    let (account_config, judge_csv, judge_html) = if config.participation_mode
+        == warm_core::ParticipationMode::GeneratedAccounts
+        && config.account_count > 0
+    {
+        let (records, verifiers) =
+            crate::accounts::generate_participant_accounts(&contest.id, config.account_count)?;
+        let csv = crate::accounts::export_credentials_csv(&contest.title, &contest.id, &records);
+        let html = crate::accounts::export_credentials_printable_html(
+            &contest.title,
+            &contest.id,
+            &records,
+        );
+        (
+            warm_core::AccountModeConfig {
+                mode: warm_core::ParticipationMode::GeneratedAccounts,
+                account_count: config.account_count,
+                verifiers,
+            },
+            Some(csv),
+            Some(html),
+        )
+    } else {
+        (warm_core::AccountModeConfig::default(), None, None)
+    };
+
+    if let Some(csv) = judge_csv {
+        let _ = fs::write(judge_dir.join("credentials.csv"), csv);
+    }
+    if let Some(html) = judge_html {
+        let _ = fs::write(judge_dir.join("credentials.html"), html);
+    }
+
     let mut binary_checksums = BTreeMap::new();
     binary_checksums.insert("windows-x86_64".to_string(), "PENDING_BUILD".to_string());
     binary_checksums.insert("linux-x86_64".to_string(), "PENDING_BUILD".to_string());
@@ -135,6 +170,7 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
         manifest_signing_key_pub_hex: signing_keypair.public_key_hex(),
         client_binary_checksums: binary_checksums,
         created_at: Utc::now(),
+        account_mode: account_config,
     };
 
     let signed_manifest = manifest.sign(&signing_keypair)?;
@@ -269,6 +305,8 @@ mod tests {
             branding_theme: "dark".to_string(),
             output_base_dir: temp_dir.clone(),
             enable_cpp_compiler: false,
+            participation_mode: warm_core::ParticipationMode::NoAccounts,
+            account_count: 0,
         };
 
         let bundle = generate_contest_distribution(&config).expect("Generation should succeed");
@@ -314,6 +352,55 @@ mod tests {
         assert!(bundle.signed_manifest.verify().is_ok());
 
         // Cleanup
+        let _ = fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn test_generate_contest_distribution_with_accounts() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("warm_dist_acc_test_{}", uuid::Uuid::new_v4()));
+        let start = Utc::now();
+        let end = start + Duration::hours(3);
+
+        let config = ContestBuildConfig {
+            title: "GOCUP Mode B".to_string(),
+            organizer: "National Committee".to_string(),
+            description: "Accounts Test Contest".to_string(),
+            start_time: start,
+            end_time: end,
+            prohibited_apps: vec![],
+            restricted_domains: vec![],
+            supported_platforms: vec!["windows".to_string()],
+            branding_theme: "dark".to_string(),
+            output_base_dir: temp_dir.clone(),
+            enable_cpp_compiler: false,
+            participation_mode: warm_core::ParticipationMode::GeneratedAccounts,
+            account_count: 5,
+        };
+
+        let bundle = generate_contest_distribution(&config).expect("Generation should succeed");
+        assert!(bundle.signed_manifest.verify().is_ok());
+        assert_eq!(
+            bundle.signed_manifest.manifest.account_mode.mode,
+            warm_core::ParticipationMode::GeneratedAccounts
+        );
+        assert_eq!(
+            bundle.signed_manifest.manifest.account_mode.verifiers.len(),
+            5
+        );
+
+        let judge_csv = bundle.root_dir.join("judge/credentials.csv");
+        assert!(judge_csv.exists());
+        let csv_content = fs::read_to_string(judge_csv).unwrap();
+        assert!(csv_content.contains("GOCUP-MODE-B-001"));
+        assert!(csv_content.contains("GOCUP-MODE-B-005"));
+
+        assert!(!bundle.root_dir.join("client/credentials.csv").exists());
+        assert!(!bundle
+            .root_dir
+            .join("client/windows/credentials.csv")
+            .exists());
+
         let _ = fs::remove_dir_all(temp_dir);
     }
 }

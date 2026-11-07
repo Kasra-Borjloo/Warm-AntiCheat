@@ -1,212 +1,283 @@
-// Participant client state
 const state = {
-  isEnrolled: false,
-  isActive: false,
-  participantId: '',
-  sessionStartTime: null,
+  participantId: 'team-42',
+  enrollmentToken: 'WARM-GOCUP-1-TEAM42-VALIDTOKEN',
+  sessionActive: false,
+  startTime: null,
   eventsCount: 0,
-  timerInterval: null
+  timerInterval: null,
+  requiresLogin: false,
+  authenticatedAccountId: null,
+  contestId: 'gocup-1'
 };
 
-// DOM references
-const sessionStatusIndicator = document.getElementById('sessionStatusIndicator');
-const sessionStatusText = document.getElementById('sessionStatusText');
-const enrollmentCard = document.getElementById('enrollmentCard');
-const activeSessionCard = document.getElementById('activeSessionCard');
-const participantIdInput = document.getElementById('participantId');
+const windowTitle = document.getElementById('windowTitle');
 const startSessionBtn = document.getElementById('startSessionBtn');
 const concludeSessionBtn = document.getElementById('concludeSessionBtn');
+const enrollmentCard = document.getElementById('enrollmentCard');
+const activeSessionCard = document.getElementById('activeSessionCard');
 const activeParticipantId = document.getElementById('activeParticipantId');
 const elapsedTimer = document.getElementById('elapsedTimer');
-const eventsCountSpan = document.getElementById('eventsCount');
+const eventsCountEl = document.getElementById('eventsCount');
+const sessionStatusIndicator = document.getElementById('sessionStatusIndicator');
+const sessionStatusText = document.getElementById('sessionStatusText');
 const exportBtn = document.getElementById('exportBtn');
 const exportResult = document.getElementById('exportResult');
 const exportResultText = document.getElementById('exportResultText');
+const exportPathInput = document.getElementById('exportPathInput');
 
-// Format seconds into HH:MM:SS
-function formatTime(totalSeconds) {
-  const pad = (n) => String(n).padStart(2, '0');
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  return `${pad(h)}:${pad(m)}:${pad(s)}`;
-}
+const loginCard = document.getElementById('loginCard');
+const loginUsernameInput = document.getElementById('loginUsername');
+const loginPasswordInput = document.getElementById('loginPassword');
+const submitLoginBtn = document.getElementById('submitLoginBtn');
+const loginError = document.getElementById('loginError');
+const loginErrorText = document.getElementById('loginErrorText');
 
-// Tab navigation
+const exportModalOverlay = document.getElementById('exportModalOverlay');
+const modalLogNameInput = document.getElementById('modalLogNameInput');
+const modalLogNameError = document.getElementById('modalLogNameError');
+const modalCancelBtn = document.getElementById('modalCancelBtn');
+const modalConfirmExportBtn = document.getElementById('modalConfirmExportBtn');
+
+const compileRunBtn = document.getElementById('compileRunBtn');
+const stopExecutionBtn = document.getElementById('stopExecutionBtn');
+const cppSourceEditor = document.getElementById('cppSourceEditor');
+const cppFileInput = document.getElementById('cppFileInput');
+const terminalStdin = document.getElementById('terminalStdin');
+const terminalOutput = document.getElementById('terminalOutput');
+const toolchainBadge = document.getElementById('toolchainBadge');
+
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
 
     btn.classList.add('active');
-    document.getElementById(btn.dataset.tab).classList.add('active');
+    const tabId = btn.dataset.tab;
+    const tabContent = document.getElementById(tabId);
+    if (tabContent) {
+      tabContent.classList.add('active');
+    }
+    if (window.replaceLucideIcons) {
+      window.replaceLucideIcons();
+    }
   });
 });
 
-// Start Session
-startSessionBtn.addEventListener('click', async () => {
-  const pId = participantIdInput.value.trim();
-  if (!pId) {
-    alert('Please enter your Participant ID');
+async function checkParticipationMode() {
+  if (window.__TAURI__ && window.__TAURI__.core) {
+    try {
+      const modeInfo = await window.__TAURI__.core.invoke('get_participation_mode');
+      state.contestId = modeInfo.contest_id || 'gocup-1';
+      state.requiresLogin = modeInfo.requires_login;
+
+      if (state.requiresLogin) {
+        enrollmentCard.style.display = 'none';
+        loginCard.style.display = 'block';
+      }
+    } catch (e) {
+      console.warn('Mode check error:', e);
+    }
+  }
+}
+
+submitLoginBtn.addEventListener('click', async () => {
+  const username = loginUsernameInput.value.trim();
+  const password = loginPasswordInput.value.trim();
+
+  loginError.style.display = 'none';
+
+  if (!username || !password) {
+    loginErrorText.textContent = 'Please enter both username and password';
+    loginError.style.display = 'block';
     return;
   }
 
-  state.isEnrolled = true;
-  state.isActive = true;
-  state.participantId = pId;
-  state.sessionStartTime = new Date();
-  state.eventsCount = 1; // Initial launch event
-
   if (window.__TAURI__ && window.__TAURI__.core) {
     try {
-      await window.__TAURI__.core.invoke('start_monitoring_session', { participantId: pId });
-    } catch (e) {
-      console.warn('Native monitoring start error:', e);
-    }
-  }
+      const res = await window.__TAURI__.core.invoke('login_participant_account', {
+        contestId: state.contestId,
+        username,
+        password
+      });
 
-  // UI transition
+      if (res.success) {
+        state.authenticatedAccountId = res.account_id;
+        state.participantId = res.username;
+        loginCard.style.display = 'none';
+        enrollmentCard.style.display = 'block';
+        document.getElementById('participantId').value = res.username;
+        startSession();
+      }
+    } catch (err) {
+      loginErrorText.textContent = typeof err === 'string' ? err : 'Invalid credentials';
+      loginError.style.display = 'block';
+    }
+  } else {
+    loginCard.style.display = 'none';
+    enrollmentCard.style.display = 'block';
+    startSession();
+  }
+});
+
+function startSession() {
+  state.participantId = document.getElementById('participantId').value.trim() || 'team-42';
+  state.sessionActive = true;
+  state.startTime = new Date();
+  state.eventsCount = 1;
+
   enrollmentCard.style.display = 'none';
   activeSessionCard.style.display = 'block';
-  activeParticipantId.textContent = pId;
-  eventsCountSpan.textContent = state.eventsCount;
+  activeParticipantId.textContent = state.participantId;
 
-  sessionStatusIndicator.classList.remove('status-idle');
-  sessionStatusIndicator.classList.add('status-active');
-  sessionStatusText.textContent = 'Session Active (Monitoring On)';
+  sessionStatusIndicator.className = 'status-indicator status-active';
+  sessionStatusText.textContent = 'Active Monitoring';
 
-  // Start elapsed timer
-  state.timerInterval = setInterval(() => {
-    const elapsed = Math.floor((new Date() - state.sessionStartTime) / 1000);
-    elapsedTimer.textContent = formatTime(elapsed);
+  state.timerInterval = setInterval(updateTimer, 1000);
+  if (window.__TAURI__ && window.__TAURI__.core) {
+    window.__TAURI__.core.invoke('start_monitoring_session', { participantId: state.participantId });
+  }
+}
 
-    // Increment simulated background heartbeat events every 15s
-    if (elapsed > 0 && elapsed % 15 === 0) {
-      state.eventsCount += 1;
-      eventsCountSpan.textContent = state.eventsCount;
-    }
-  }, 1000);
+startSessionBtn.addEventListener('click', () => {
+  startSession();
 });
 
-// Conclude Session
 concludeSessionBtn.addEventListener('click', () => {
-  if (!confirm('Are you sure you want to conclude the competition session?')) {
-    return;
-  }
-
+  state.sessionActive = false;
   clearInterval(state.timerInterval);
-  state.isActive = false;
 
-  sessionStatusIndicator.classList.remove('status-active');
-  sessionStatusIndicator.classList.add('status-idle');
+  sessionStatusIndicator.className = 'status-indicator status-idle';
   sessionStatusText.textContent = 'Session Concluded';
 
-  alert('Session concluded. Please proceed to the "Export Evidence" tab to save your sealed package.');
-  // Switch to export tab
-  document.querySelector('.tab-btn[data-tab="exportTab"]').click();
+  alert('Session concluded. Navigate to Export Evidence tab to export your audit log.');
 });
 
-// Export Evidence
-exportBtn.addEventListener('click', async () => {
-  const dest = document.getElementById('exportPathInput').value.trim();
-  exportResult.style.display = 'block';
+function updateTimer() {
+  if (!state.startTime) return;
+  const now = new Date();
+  const diff = Math.floor((now - state.startTime) / 1000);
+
+  const hours = String(Math.floor(diff / 3600)).padStart(2, '0');
+  const mins = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+  const secs = String(diff % 60).padStart(2, '0');
+
+  elapsedTimer.textContent = `${hours}:${mins}:${secs}`;
+  state.eventsCount += 1;
+  eventsCountEl.textContent = state.eventsCount;
+}
+
+exportBtn.addEventListener('click', () => {
+  modalLogNameInput.value = state.participantId || '';
+  modalLogNameError.style.display = 'none';
+  exportModalOverlay.style.display = 'flex';
+});
+
+modalCancelBtn.addEventListener('click', () => {
+  exportModalOverlay.style.display = 'none';
+});
+
+modalConfirmExportBtn.addEventListener('click', async () => {
+  const declaredName = modalLogNameInput.value.trim();
+  modalLogNameError.style.display = 'none';
 
   if (window.__TAURI__ && window.__TAURI__.core) {
     try {
-      const res = await window.__TAURI__.core.invoke('export_usb_package', { destFolder: dest });
-      exportResultText.textContent = `[SUCCESS] Encrypted Evidence Archive Exported!\nPath: ${res.export_path}\nChecksum: ${res.checksum}\n${res.message}`;
-      return;
-    } catch (e) {
-      exportResultText.textContent = `[ERROR] USB export failed: ${e}`;
-      return;
-    }
-  }
+      const valid = await window.__TAURI__.core.invoke('validate_log_name', { name: declaredName });
+      const dest = exportPathInput.value || './export';
+      const res = await window.__TAURI__.core.invoke('export_contest_log', {
+        destFolder: dest,
+        declaredLogName: valid
+      });
 
-  exportResultText.textContent = `Evidence successfully packaged into ${dest}/${state.participantId || 'team-42'}.warm-evidence with SHA-256 hash-chain verification.`;
+      exportModalOverlay.style.display = 'none';
+      exportResult.style.display = 'block';
+      if (res.success) {
+        exportResultText.textContent = `${res.message} Archive: ${res.export_path} (SHA-256: ${res.checksum})`;
+      } else {
+        exportResultText.textContent = res.message;
+      }
+    } catch (err) {
+      modalLogNameError.textContent = typeof err === 'string' ? err : 'Invalid name';
+      modalLogNameError.style.display = 'block';
+    }
+  } else {
+    exportModalOverlay.style.display = 'none';
+    exportResult.style.display = 'block';
+    exportResultText.textContent = `Evidence package exported as ${declaredName}_evidence.sqlite`;
+  }
 });
 
-// Built-in C++ Compiler Integration
-const cppFileInput = document.getElementById('cppFileInput');
-const cppSourceEditor = document.getElementById('cppSourceEditor');
-const compileRunBtn = document.getElementById('compileRunBtn');
-const stopExecutionBtn = document.getElementById('stopExecutionBtn');
-const terminalStdin = document.getElementById('terminalStdin');
-const terminalOutput = document.getElementById('terminalOutput');
-const toolchainBadge = document.getElementById('toolchainBadge');
+cppFileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    cppSourceEditor.value = evt.target.result;
+  };
+  reader.readAsText(file);
+});
 
-if (cppFileInput) {
-  cppFileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        cppSourceEditor.value = event.target.result;
-        terminalOutput.textContent = `[Loaded file: ${file.name} (${file.size} bytes)]\nReady to compile with bundled GNU G++ (C++23).\n`;
-      };
-      reader.readAsText(file);
-    }
-  });
-}
+compileRunBtn.addEventListener('click', async () => {
+  const code = cppSourceEditor.value;
+  const stdin = terminalStdin.value;
 
-if (compileRunBtn) {
-  compileRunBtn.addEventListener('click', async () => {
-    const sourceCode = cppSourceEditor.value;
-    const stdinInput = terminalStdin.value;
+  terminalOutput.textContent = '[Compiling using bundled GNU G++ (C++23) -O2 -pipe...]\n';
 
-    terminalOutput.textContent = `[*] Invoking bundled GNU G++ (-std=c++23 -O2 -pipe)...\n`;
-    compileRunBtn.disabled = true;
+  if (window.__TAURI__ && window.__TAURI__.core) {
+    try {
+      const res = await window.__TAURI__.core.invoke('compile_and_run_cpp', {
+        sourceCode: code,
+        stdinInput: stdin || null
+      });
 
-    if (window.__TAURI__ && window.__TAURI__.core) {
-      try {
-        const res = await window.__TAURI__.core.invoke('compile_and_run_cpp', {
-          sourceCode: sourceCode,
-          stdinInput: stdinInput || null
-        });
-
-        compileRunBtn.disabled = false;
-
-        let output = `[COMPILATION: ${res.compilation_success ? 'SUCCESS' : 'FAILED'} in ${res.compilation_duration_ms}ms]\n`;
-        output += `Source SHA-256: ${res.source_sha256}\n`;
-        if (res.binary_sha256) {
-          output += `Binary SHA-256: ${res.binary_sha256}\n`;
-        }
-
-        if (res.compilation_diagnostics) {
-          output += `\n--- Compiler Diagnostics ---\n${res.compilation_diagnostics}\n`;
-        }
-
-        if (res.execution_started) {
-          output += `\n--- Program Execution (Runtime: ${res.execution_duration_ms}ms, Exit Code: ${res.exit_code ?? 'None'}) ---\n`;
-          if (res.stdout) {
-            output += `[STDOUT]\n${res.stdout}\n`;
-          }
-          if (res.stderr) {
-            output += `[STDERR]\n${res.stderr}\n`;
-          }
-          if (res.timed_out) {
-            output += `\n[VIOLATION] ${res.resource_violation || 'Execution Timed Out'}\n`;
-          }
-        }
-
-        terminalOutput.textContent = output;
-      } catch (err) {
-        compileRunBtn.disabled = false;
-        terminalOutput.textContent = `[COMPILER ERROR] ${err}\n`;
+      if (!res.compilation_success) {
+        terminalOutput.textContent = `[COMPILATION FAILED (${res.compilation_duration_ms}ms)]\n${res.compilation_diagnostics}`;
+        return;
       }
-    } else {
-      // Browser preview mode simulation
-      compileRunBtn.disabled = false;
-      terminalOutput.textContent = `[BROWSER PREVIEW MODE]\n`;
-      terminalOutput.textContent += `[COMPILATION: SUCCESS (Simulated)]\n`;
-      terminalOutput.textContent += `Source SHA-256: 3a2c...88f1\n`;
-      terminalOutput.textContent += `--- Program Execution ---\n`;
-      terminalOutput.textContent += `Warm-AntiCheat C++23 Solution Ready!\n[Process exited with code 0]\n`;
+
+      let out = `[COMPILATION SUCCEEDED (${res.compilation_duration_ms}ms)]\n`;
+      if (res.compilation_diagnostics) {
+        out += `Diagnostics:\n${res.compilation_diagnostics}\n`;
+      }
+
+      if (res.execution_started) {
+        out += `\n[PROGRAM OUTPUT (Exit Code: ${res.exit_code}, Duration: ${res.execution_duration_ms}ms)]\n`;
+        if (res.stdout) out += res.stdout;
+        if (res.stderr) out += `\n[stderr]\n${res.stderr}`;
+        if (res.timed_out) out += `\n[EXECUTION TIMED OUT]\n`;
+      }
+
+      terminalOutput.textContent = out;
+    } catch (err) {
+      terminalOutput.textContent = `[ERROR] ${err}`;
     }
-  });
+  } else {
+    terminalOutput.textContent = `[MOCK RUN]\nWarm-AntiCheat C++23 Solution Ready!\nExit Code: 0`;
+  }
+});
+
+stopExecutionBtn.addEventListener('click', () => {
+  terminalOutput.textContent += '\n[Execution process terminated by participant.]\n';
+});
+
+async function checkCompilerStatus() {
+  if (window.__TAURI__ && window.__TAURI__.core) {
+    try {
+      const status = await window.__TAURI__.core.invoke('get_compiler_status');
+      if (status.enabled && status.toolchain_available) {
+        toolchainBadge.innerHTML = `<span data-lucide="check-circle" data-size="14"></span> Bundled GNU G++ ${status.toolchain_version} (${status.cxx_standard})`;
+      } else {
+        toolchainBadge.innerHTML = `<span data-lucide="alert-triangle" data-size="14"></span> Compiler Not Available`;
+        toolchainBadge.style.color = '#f59e0b';
+      }
+    } catch (e) {
+      console.warn('Compiler status check error:', e);
+    }
+  }
 }
 
-if (stopExecutionBtn) {
-  stopExecutionBtn.addEventListener('click', () => {
-    terminalOutput.textContent += `\n[STOP] Execution termination requested by participant.\n`;
-  });
+checkParticipationMode();
+checkCompilerStatus();
+if (window.replaceLucideIcons) {
+  window.replaceLucideIcons();
 }

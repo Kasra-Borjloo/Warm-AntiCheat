@@ -422,3 +422,9 @@ body {
 .mt-4 {
   margin-top: 24px;
 }
+
+.icon {
+  display: inline-block;
+  vertical-align: middle;
+  stroke: currentColor;
+}

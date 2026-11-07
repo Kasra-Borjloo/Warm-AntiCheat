@@ -215,6 +215,12 @@ body {
   font-family: monospace;
 }
 
+.icon {
+  display: inline-block;
+  vertical-align: middle;
+  stroke: currentColor;
+}
+
 .text-success {
   color: var(--accent-success);
 }

@@ -13,6 +13,7 @@ warm_storage.workspace = true
 warm_policies.workspace = true
 warm_platform.workspace = true
 warm_compiler.workspace = true
+warm_builder_core.workspace = true
 uuid = { workspace = true }
 chrono = { workspace = true }
 serde.workspace = true

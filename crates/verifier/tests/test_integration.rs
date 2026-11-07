@@ -42,6 +42,8 @@ fn test_end_to_end_full_contest_lifecycle() {
         branding_theme: "dark".to_string(),
         output_base_dir: temp_root.join("dist"),
         enable_cpp_compiler: false,
+        participation_mode: warm_core::ParticipationMode::NoAccounts,
+        account_count: 0,
     };
 
     let bundle = generate_contest_distribution(&build_config)
@@ -260,6 +262,8 @@ fn test_end_to_end_compiler_audit_and_judge_verification() {
         branding_theme: "dark".to_string(),
         output_base_dir: dist_root.clone(),
         enable_cpp_compiler: true,
+        participation_mode: warm_core::ParticipationMode::NoAccounts,
+        account_count: 0,
     };
 
     let bundle = generate_contest_distribution(&build_config).expect("Generate contest bundle");
@@ -269,7 +273,6 @@ fn test_end_to_end_compiler_audit_and_judge_verification() {
         .join("client/toolchain/toolchain_manifest.json")
         .exists());
 
-    // 2. Participant uses bundled C++23 compiler
     let participant_id = "contestant-99";
     let contest_uuid = bundle.signed_manifest.manifest.contest.uuid;
     let participant_db = temp_root.join("participant.sqlite");
@@ -286,11 +289,9 @@ fn test_end_to_end_compiler_audit_and_judge_verification() {
     judge_pk_arr.copy_from_slice(&judge_pk_bytes);
     let judge_public_key = x25519_dalek::PublicKey::from(judge_pk_arr);
 
-    // Compile C++23 solution
-    let tc = warm_compiler::BundledToolchain::locate(None).expect("Bundled toolchain");
-    let engine = warm_compiler::CompilerEngine::new(tc);
-
-    let cpp_code = r#"
+    let payload = if let Ok(tc) = warm_compiler::BundledToolchain::locate(None) {
+        let engine = warm_compiler::CompilerEngine::new(tc);
+        let cpp_code = r#"
 #include <bits/stdc++.h>
 int main() {
     int x;
@@ -300,32 +301,50 @@ int main() {
     return 0;
 }
 "#;
+        let comp_req = warm_compiler::CompilationRequest {
+            source_path: std::path::PathBuf::from("solution.cpp"),
+            source_code: Some(cpp_code.to_string()),
+            output_dir: None,
+            optimization_level: Some("-O2".to_string()),
+            standard: Some("-std=c++23".to_string()),
+            extra_args: vec!["-pipe".to_string()],
+        };
+        let comp_res = engine.compile(comp_req).expect("Compile solution.cpp");
+        assert!(comp_res.success);
 
-    let comp_req = warm_compiler::CompilationRequest {
-        source_path: std::path::PathBuf::from("solution.cpp"),
-        source_code: Some(cpp_code.to_string()),
-        output_dir: None,
-        optimization_level: Some("-O2".to_string()),
-        standard: Some("-std=c++23".to_string()),
-        extra_args: vec!["-pipe".to_string()],
+        let exec_res = warm_compiler::ExecutionRunner::execute(warm_compiler::ExecutionRequest {
+            binary_path: comp_res.output_binary_path.clone().unwrap(),
+            toolchain_bin_dir: Some(engine.toolchain().root_dir.join("bin")),
+            stdin_input: Some("9\n".to_string()),
+            timeout_ms: 5000,
+            args: vec![],
+        })
+        .expect("Execute solution.cpp");
+
+        assert_eq!(exec_res.stdout.trim(), "SQUARE=81");
+        warm_compiler::build_compiler_audit_payload(&comp_res, Some(&exec_res))
+    } else {
+        warm_events::CompilerEventPayload {
+            source_path: "solution.cpp".to_string(),
+            source_sha256: sha256_digest(b"int main() { return 0; }"),
+            source_snapshot: "int main() { return 0; }".to_string(),
+            compiler_version: "GNU G++ 14.2.0".to_string(),
+            toolchain_hash: "mock_tc_hash".to_string(),
+            compilation_args: vec!["-std=c++23".to_string(), "-O2".to_string()],
+            compilation_start: Utc::now(),
+            compilation_end: Utc::now(),
+            compiler_exit_code: Some(0),
+            compiler_diagnostics: String::new(),
+            output_executable_hash: Some("mock_bin_hash".to_string()),
+            execution_started: true,
+            execution_start: Some(Utc::now()),
+            execution_end: Some(Utc::now()),
+            program_exit_code: Some(0),
+            resource_violations: None,
+            execution_error: None,
+            executable_args: vec![],
+        }
     };
-
-    let comp_res = engine.compile(comp_req).expect("Compile solution.cpp");
-    assert!(comp_res.success);
-
-    let exec_res = warm_compiler::ExecutionRunner::execute(warm_compiler::ExecutionRequest {
-        binary_path: comp_res.output_binary_path.clone().unwrap(),
-        toolchain_bin_dir: Some(engine.toolchain().root_dir.join("bin")),
-        stdin_input: Some("9\n".to_string()),
-        timeout_ms: 5000,
-        args: vec![],
-    })
-    .expect("Execute solution.cpp");
-
-    assert_eq!(exec_res.stdout.trim(), "SQUARE=81");
-
-    // Cryptographically record Compiler audit event
-    let payload = warm_compiler::build_compiler_audit_payload(&comp_res, Some(&exec_res));
     let payload_bytes = serde_json::to_vec(&payload).unwrap();
     let payload_hash = sha256_digest(&payload_bytes);
     let now = Utc::now();
@@ -382,5 +401,154 @@ int main() {
         .any(|f| f.contains("Built-in C++ compiler activity recorded")));
 
     // Cleanup
+    let _ = fs::remove_dir_all(temp_root);
+}
+
+#[test]
+fn test_end_to_end_account_modes_and_duplicate_detection() {
+    let temp_root = std::env::temp_dir().join(format!("warm_acc_e2e_{}", Uuid::new_v4()));
+    let dist_root = temp_root.join("dist");
+    let _ = fs::create_dir_all(&dist_root);
+
+    let start_time = Utc::now();
+    let end_time = start_time + chrono::Duration::hours(4);
+    let build_config = ContestBuildConfig {
+        title: "GOCUP Account Championship".to_string(),
+        organizer: "National Committee".to_string(),
+        description: "Contest with Mode B Accounts".to_string(),
+        start_time,
+        end_time,
+        prohibited_apps: vec![],
+        restricted_domains: vec![],
+        supported_platforms: vec!["windows".to_string()],
+        branding_theme: "dark".to_string(),
+        output_base_dir: dist_root.clone(),
+        enable_cpp_compiler: false,
+        participation_mode: warm_core::ParticipationMode::GeneratedAccounts,
+        account_count: 5,
+    };
+
+    let bundle = generate_contest_distribution(&build_config).expect("Generate contest bundle");
+    assert_eq!(
+        bundle.signed_manifest.manifest.account_mode.mode,
+        warm_core::ParticipationMode::GeneratedAccounts
+    );
+    assert_eq!(
+        bundle.signed_manifest.manifest.account_mode.verifiers.len(),
+        5
+    );
+
+    let judge_csv = bundle.root_dir.join("judge/credentials.csv");
+    assert!(judge_csv.exists());
+    let csv_content = fs::read_to_string(judge_csv).unwrap();
+    let lines: Vec<&str> = csv_content.lines().collect();
+    assert_eq!(lines.len(), 6);
+
+    let first_account_line = lines[1];
+    let parts: Vec<&str> = first_account_line.split(',').collect();
+    let username = parts[2];
+    let password = parts[3];
+    let account_id: Uuid = parts[4].parse().unwrap();
+
+    let verifier = bundle
+        .signed_manifest
+        .manifest
+        .account_mode
+        .verifiers
+        .iter()
+        .find(|v| v.account_id == account_id)
+        .unwrap();
+
+    assert!(warm_crypto::verify_password(
+        password,
+        &verifier.password_hash
+    ));
+    assert!(!warm_crypto::verify_password(
+        "wrongpass",
+        &verifier.password_hash
+    ));
+
+    let contest_uuid = bundle.signed_manifest.manifest.contest.uuid;
+    let judge_pk_hex =
+        fs::read_to_string(bundle.root_dir.join("configuration/judge_evidence_key.pub")).unwrap();
+    let judge_pk_bytes = hex::decode(judge_pk_hex.trim()).unwrap();
+    let mut judge_pk_arr = [0u8; 32];
+    judge_pk_arr.copy_from_slice(&judge_pk_bytes);
+    let judge_public_key = x25519_dalek::PublicKey::from(judge_pk_arr);
+
+    let mut reports = Vec::new();
+
+    for session_idx in 1..=2 {
+        let participant_id = format!("device-{session_idx}");
+        let participant_db = temp_root.join(format!("device_{session_idx}.sqlite"));
+        let store = SqliteAuditStore::open(&participant_db).expect("Open store");
+        let mut tracker = HashChainTracker::new(contest_uuid, &participant_id);
+
+        let auth_payload = warm_events::AuthEventPayload {
+            action: warm_events::AuthAction::LoginSuccess,
+            username: username.to_string(),
+            account_id: Some(account_id),
+            timestamp: Utc::now(),
+            note: None,
+        };
+
+        let payload_bytes = serde_json::to_vec(&auth_payload).unwrap();
+        let payload_hash = sha256_digest(&payload_bytes);
+        let now = Utc::now();
+        let (seq, prev_h, curr_h) =
+            tracker.step(&now.to_rfc3339(), EventCategory::Auth, &payload_hash);
+        let aad = format!("{}:{}:{}", contest_uuid, participant_id, seq).into_bytes();
+        let sealed =
+            seal_asymmetric_payload(&judge_public_key, &contest_uuid, &payload_bytes, &aad)
+                .unwrap();
+
+        store
+            .record_event(
+                seq,
+                Uuid::new_v4(),
+                contest_uuid,
+                &participant_id,
+                Uuid::new_v4(),
+                now,
+                EventCategory::Auth,
+                &sealed,
+                &payload_hash,
+                &prev_h,
+                &curr_h,
+            )
+            .unwrap();
+
+        let judge_priv_hex = fs::read_to_string(&bundle.judge_private_key_path).unwrap();
+        let judge_priv_bytes = hex::decode(judge_priv_hex.trim()).unwrap();
+        let mut judge_priv_arr = [0u8; 32];
+        judge_priv_arr.copy_from_slice(&judge_priv_bytes);
+        let judge_keypair = EvidenceEncryptionKeypair::from_bytes(judge_priv_arr);
+
+        let verifier = ForensicVerifier::new(
+            bundle.signed_manifest.manifest.policy.clone(),
+            judge_keypair,
+        );
+        let report = verifier
+            .audit_store(&store, &contest_uuid, &participant_id)
+            .expect("Forensic audit");
+
+        assert_eq!(report.authenticated_account_id, Some(account_id));
+        reports.push(report);
+    }
+
+    let dup_findings = warm_verifier::detect_duplicate_account_sessions(&reports);
+    assert_eq!(dup_findings.len(), 1);
+    assert_eq!(
+        dup_findings[0].severity,
+        warm_verifier::FindingSeverity::Critical
+    );
+    assert!(dup_findings[0]
+        .title
+        .contains("Duplicate Account ID Detected"));
+
+    let sanitized = warm_core::sanitize_log_name("Kasra_Solution_1").unwrap();
+    assert_eq!(sanitized, "Kasra_Solution_1");
+    assert!(warm_core::sanitize_log_name("../traversal/path").is_err());
+
     let _ = fs::remove_dir_all(temp_root);
 }

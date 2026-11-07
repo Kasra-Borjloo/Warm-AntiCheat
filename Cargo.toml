@@ -17,7 +17,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.3.0"
 authors = ["Kasra Borjloo <kasraborjloo2009@gmail.com>"]
 edition = "2021"
 license = "GPL-3.0-only"
@@ -33,6 +33,7 @@ thiserror = "1.0"
 anyhow = "1.0"
 sha2 = "0.10"
 aes-gcm = "0.10"
+argon2 = { version = "0.5", default-features = false, features = ["alloc", "password-hash"] }
 x25519-dalek = { version = "2.0", features = ["static_secrets"] }
 ed25519-dalek = { version = "2.1", features = ["rand_core"] }
 rand = "0.8"

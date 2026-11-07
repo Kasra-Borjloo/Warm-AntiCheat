@@ -65,6 +65,12 @@ pub struct ForensicReport {
     pub findings: Vec<ForensicFinding>,
     pub timeline: Vec<DecryptedTimelineEvent>,
     pub judge_notes: Option<String>,
+    #[serde(default)]
+    pub authenticated_account_id: Option<Uuid>,
+    #[serde(default)]
+    pub declared_log_name: Option<String>,
+    #[serde(default)]
+    pub participation_mode: warm_core::ParticipationMode,
 }
 
 pub struct ForensicVerifier {
@@ -115,8 +121,9 @@ impl ForensicVerifier {
             .unwrap_or_else(Uuid::new_v4);
 
         let mut last_heartbeat_time: Option<DateTime<Utc>> = None;
+        let mut authenticated_account_id: Option<Uuid> = None;
+        let mut failed_auth_count = 0;
 
-        // 3. Decrypt and evaluate each event against policies
         for event in &raw_events {
             let aad = format!(
                 "{}:{}:{}",
@@ -219,6 +226,22 @@ impl ForensicVerifier {
                 }
             }
 
+            if event.category == "Auth" {
+                if let Ok(auth_payload) =
+                    serde_json::from_value::<warm_events::AuthEventPayload>(payload_value.clone())
+                {
+                    match auth_payload.action {
+                        warm_events::AuthAction::LoginSuccess => {
+                            authenticated_account_id = auth_payload.account_id;
+                        }
+                        warm_events::AuthAction::LoginFailure => {
+                            failed_auth_count += 1;
+                        }
+                        warm_events::AuthAction::Logout => {}
+                    }
+                }
+            }
+
             // D. Check for Monitoring Gaps & Sleep Interruptions
             if let Ok(dt) = DateTime::parse_from_rfc3339(&event.timestamp_rfc3339) {
                 let dt_utc = dt.with_timezone(&Utc);
@@ -256,6 +279,18 @@ impl ForensicVerifier {
             });
         }
 
+        if failed_auth_count > 5 {
+            findings.push(ForensicFinding {
+                severity: FindingSeverity::Warning,
+                title: "Excessive Authentication Failures".to_string(),
+                description: format!(
+                    "{failed_auth_count} failed authentication attempts recorded."
+                ),
+                supporting_sequences: vec![],
+                timestamps: vec![],
+            });
+        }
+
         let summary = match classification {
             VerdictClassification::Safe => {
                 format!(
@@ -288,8 +323,45 @@ impl ForensicVerifier {
             findings,
             timeline,
             judge_notes: None,
+            authenticated_account_id,
+            declared_log_name: None,
+            participation_mode: warm_core::ParticipationMode::NoAccounts,
         })
     }
+}
+
+pub fn detect_duplicate_account_sessions(reports: &[ForensicReport]) -> Vec<ForensicFinding> {
+    use std::collections::HashMap;
+    let mut map: HashMap<Uuid, Vec<(&str, Uuid)>> = HashMap::new();
+    for r in reports {
+        if let Some(acc_id) = r.authenticated_account_id {
+            map.entry(acc_id)
+                .or_default()
+                .push((&r.participant_id, r.session_id));
+        }
+    }
+
+    let mut findings = Vec::new();
+    for (acc_id, sessions) in map {
+        if sessions.len() > 1 {
+            let session_list = sessions
+                .iter()
+                .map(|(p, s)| format!("{p} (session {s})"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            findings.push(ForensicFinding {
+                severity: FindingSeverity::Critical,
+                title: "Duplicate Account ID Detected".to_string(),
+                description: format!(
+                    "Account ID {acc_id} was observed across {} distinct sessions: {session_list}. Multiple sessions detected under same credential.",
+                    sessions.len()
+                ),
+                supporting_sequences: vec![],
+                timestamps: vec![],
+            });
+        }
+    }
+    findings
 }
 
 #[cfg(test)]
@@ -374,5 +446,48 @@ mod tests {
         assert!(report.findings[0]
             .title
             .contains("Prohibited Application Executed"));
+    }
+
+    #[test]
+    fn test_detect_duplicate_account_sessions() {
+        let account_id = Uuid::new_v4();
+        let report1 = ForensicReport {
+            contest_uuid: Uuid::new_v4(),
+            participant_id: "participant-1".to_string(),
+            session_id: Uuid::new_v4(),
+            classification: VerdictClassification::Safe,
+            summary: String::new(),
+            total_events: 10,
+            hash_chain_verified: true,
+            findings: vec![],
+            timeline: vec![],
+            judge_notes: None,
+            authenticated_account_id: Some(account_id),
+            declared_log_name: None,
+            participation_mode: warm_core::ParticipationMode::GeneratedAccounts,
+        };
+
+        let report2 = ForensicReport {
+            contest_uuid: Uuid::new_v4(),
+            participant_id: "participant-2".to_string(),
+            session_id: Uuid::new_v4(),
+            classification: VerdictClassification::Safe,
+            summary: String::new(),
+            total_events: 12,
+            hash_chain_verified: true,
+            findings: vec![],
+            timeline: vec![],
+            judge_notes: None,
+            authenticated_account_id: Some(account_id),
+            declared_log_name: None,
+            participation_mode: warm_core::ParticipationMode::GeneratedAccounts,
+        };
+
+        let duplicate_findings = detect_duplicate_account_sessions(&[report1, report2]);
+        assert_eq!(duplicate_findings.len(), 1);
+        assert_eq!(duplicate_findings[0].severity, FindingSeverity::Critical);
+        assert!(duplicate_findings[0]
+            .title
+            .contains("Duplicate Account ID Detected"));
     }
 }

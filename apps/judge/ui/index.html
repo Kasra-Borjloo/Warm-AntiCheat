@@ -8,36 +8,38 @@
 </head>
 <body>
   <div class="judge-layout">
-    <!-- Sidebar: Contests & Participants List -->
     <aside class="judge-sidebar">
       <div class="sidebar-header">
         <div class="brand-row">
-          <span class="icon">⚖️</span>
+          <span class="icon" data-lucide="scale" data-size="26"></span>
           <h2>Judge Verifier</h2>
         </div>
-        <span class="version-label">Warm-AntiCheat Jury Portal v0.1.0</span>
+        <span class="version-label">Warm-AntiCheat Jury Portal v0.3.0</span>
       </div>
 
       <div class="key-status-box">
         <label>Judge Decryption Key:</label>
-        <span class="key-badge text-success">✔ Key Loaded (X25519)</span>
+        <span class="key-badge text-success"><span data-lucide="key" data-size="14"></span> Key Loaded (X25519)</span>
       </div>
 
       <div class="section-title">
-        <span>Participants Submissions</span>
-        <button class="btn btn-sm btn-secondary" id="importBtn">+ Import Archive</button>
+        <span>Participant Submissions</span>
+        <button class="btn btn-sm btn-secondary" id="importBtn">
+          <span data-lucide="upload" data-size="14"></span>
+          <span>Import Archive</span>
+        </button>
       </div>
 
-      <div class="participants-list" id="participantsList">
-        <!-- Dynamically rendered participant cards -->
-      </div>
+      <div class="participants-list" id="participantsList"></div>
 
       <div class="sidebar-footer">
-        <button class="btn btn-secondary btn-sm" id="themeToggle">Toggle Theme</button>
+        <button class="btn btn-secondary btn-sm" id="themeToggle">
+          <span data-lucide="sun" data-size="14"></span>
+          <span>Toggle Theme</span>
+        </button>
       </div>
     </aside>
 
-    <!-- Main Inspection Area -->
     <main class="judge-main">
       <header class="main-header">
         <div>
@@ -50,7 +52,20 @@
       </header>
 
       <div id="inspectorContent" style="display: none;">
-        <!-- Top Stats Row -->
+        <div class="card mt-2" id="accountMetadataCard" style="display: none; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); margin-bottom: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span data-lucide="users" data-size="18"></span>
+              <span class="badge badge-outline" id="participationModeBadge">Mode A (No Accounts)</span>
+              <span style="font-size: 0.9rem;" id="accountDetailText">Self-declared handle: None</span>
+            </div>
+            <div id="duplicateAlertBadge" style="display: none;" class="badge badge-danger">
+              <span data-lucide="alert-triangle" data-size="14"></span>
+              <span>Duplicate Account Detected Across Sessions</span>
+            </div>
+          </div>
+        </div>
+
         <div class="stats-row">
           <div class="stat-card">
             <span class="label">Hash Chain</span>
@@ -70,35 +85,38 @@
           </div>
         </div>
 
-        <!-- Key Findings Card -->
         <div class="card mt-4" id="findingsCard">
-          <h3>Forensic Findings & Violations</h3>
-          <div class="findings-list" id="findingsList">
-            <!-- Rendered findings -->
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <span data-lucide="shield-alert" data-size="20"></span>
+            <h3>Forensic Findings &amp; Violations</h3>
           </div>
+          <div class="findings-list" id="findingsList"></div>
         </div>
 
-        <!-- AI Advisory Card -->
         <div class="card mt-4 ai-card">
           <div class="ai-header">
-            <h3>🤖 Advisory AI Forensic Summary</h3>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span data-lucide="bot" data-size="22"></span>
+              <h3>Advisory AI Forensic Summary</h3>
+            </div>
             <span class="badge badge-warning">Advisory Only - Human Review Mandatory</span>
           </div>
-          <div class="ai-body" id="aiSummaryBody">
-            <!-- Facts vs Inferences -->
-          </div>
+          <div class="ai-body" id="aiSummaryBody"></div>
         </div>
 
-        <!-- Timeline Card -->
         <div class="card mt-4">
           <div class="timeline-header">
-            <h3>Audit Event Timeline</h3>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span data-lucide="clock" data-size="20"></span>
+              <h3>Audit Event Timeline</h3>
+            </div>
             <div class="filter-buttons">
               <button class="filter-btn active" data-cat="all">All</button>
               <button class="filter-btn" data-cat="Compiler">Compiler</button>
               <button class="filter-btn" data-cat="Process">Process</button>
               <button class="filter-btn" data-cat="Browser">Browser</button>
               <button class="filter-btn" data-cat="Network">Network</button>
+              <button class="filter-btn" data-cat="Auth">Auth</button>
               <button class="filter-btn" data-cat="SystemLifecycle">Lifecycle</button>
             </div>
           </div>
@@ -114,18 +132,21 @@
                   <th>Event Hash</th>
                 </tr>
               </thead>
-              <tbody id="timelineTbody">
-                <!-- Timeline rows -->
-              </tbody>
+              <tbody id="timelineTbody"></tbody>
             </table>
           </div>
         </div>
 
-        <!-- Compiler Activity Forensics Card -->
         <div class="card mt-4" id="compilerCard">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <h3>Built-in C++ Compiler Forensic Inspection</h3>
-            <button class="btn btn-secondary btn-sm" id="exportCompilerReportBtn">📥 Export Compiler Activity Report</button>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span data-lucide="file-code" data-size="20"></span>
+              <h3>Built-in C++ Compiler Forensic Inspection</h3>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="exportCompilerReportBtn">
+              <span data-lucide="download" data-size="14"></span>
+              <span>Export Compiler Activity Report</span>
+            </button>
           </div>
           <p class="description">Review exact source snapshots, compiler diagnostics, and execution events cryptographically recorded in the hash chain.</p>
           <div id="compilerActivityContent" style="background: #020617; padding: 1rem; border-radius: 6px; border: 1px solid #1e293b; font-family: monospace; font-size: 0.9rem; max-height: 250px; overflow-y: auto; color: #cbd5e1;">
@@ -133,18 +154,24 @@
           </div>
         </div>
 
-        <!-- Judge Notes & Action -->
         <div class="card mt-4">
-          <h3>Judge Notes & Decision</h3>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <span data-lucide="file-text" data-size="20"></span>
+            <h3>Judge Notes &amp; Decision</h3>
+          </div>
           <textarea id="judgeNotes" placeholder="Enter confidential jury rationale and observations here..."></textarea>
           <div class="action-row mt-2">
-            <button class="btn btn-primary" id="saveDecisionBtn">Save Official Verdict</button>
+            <button class="btn btn-primary" id="saveDecisionBtn">
+              <span data-lucide="check" data-size="16"></span>
+              <span>Save Official Verdict</span>
+            </button>
           </div>
         </div>
       </div>
     </main>
   </div>
 
+  <script src="icons.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

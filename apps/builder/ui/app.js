@@ -1,4 +1,3 @@
-// State management
 const state = {
   currentStep: 1,
   contestUuid: '550e8400-e29b-41d4-a716-446655440000',
@@ -12,10 +11,11 @@ const state = {
     'chatgpt.com', 'openai.com', 'claude.ai',
     'anthropic.com', 'gemini.google.com',
     'copilot.microsoft.com', 'perplexity.ai', 'deepseek.com'
-  ]
+  ],
+  generatedCsv: '',
+  generatedHtml: ''
 };
 
-// DOM references
 const contestTitleInput = document.getElementById('contestTitle');
 const contestIdInput = document.getElementById('contestId');
 const appsContainer = document.getElementById('appsContainer');
@@ -29,7 +29,16 @@ const generateBtn = document.getElementById('generateBtn');
 const logsContainer = document.getElementById('logsContainer');
 const logOutput = document.getElementById('logOutput');
 
-// Slugify helper
+const participationModeSelect = document.getElementById('participationMode');
+const accountCountGroup = document.getElementById('accountCountGroup');
+const accountCountInput = document.getElementById('accountCount');
+const accountsActionGroup = document.getElementById('accountsActionGroup');
+const previewAccountsBtn = document.getElementById('previewAccountsBtn');
+const accountsPreviewArea = document.getElementById('accountsPreviewArea');
+const accountsStatusBadge = document.getElementById('accountsStatusBadge');
+const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+const downloadPrintableBtn = document.getElementById('downloadPrintableBtn');
+
 function slugify(title) {
   return title
     .toLowerCase()
@@ -39,7 +48,6 @@ function slugify(title) {
     .replace(/^-+|-+$/g, '') || 'contest';
 }
 
-// Initialize default date times (today + 1 hour to today + 5 hours)
 function initDateTimes() {
   const now = new Date();
   const start = new Date(now.getTime() + 60 * 60 * 1000);
@@ -54,7 +62,6 @@ function initDateTimes() {
   document.getElementById('endTime').value = formatLocal(end);
 }
 
-// Render tag lists
 function renderApps() {
   appsContainer.innerHTML = '';
   state.prohibitedApps.forEach((app, idx) => {
@@ -75,7 +82,6 @@ function renderDomains() {
   });
 }
 
-// Switch Wizard Step
 function goToStep(step) {
   state.currentStep = step;
   document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
@@ -84,9 +90,11 @@ function goToStep(step) {
   document.getElementById(`step${step}`).classList.add('active');
   document.querySelector(`.nav-item[data-step="${step}"]`).classList.add('active');
 
-  // If entering step 4, update summary
   if (step === 4) {
     updateSummary();
+  }
+  if (window.replaceLucideIcons) {
+    window.replaceLucideIcons();
   }
 }
 
@@ -95,21 +103,90 @@ function updateSummary() {
   const id = contestIdInput.value;
   const organizer = document.getElementById('organizerName').value;
   const outDir = document.getElementById('outputDirectory').value;
+  const isAccounts = participationModeSelect.value === 'generated_accounts';
+  const count = accountCountInput.value;
 
   document.getElementById('summaryTitle').textContent = title;
   document.getElementById('summaryId').textContent = id;
   document.getElementById('summaryOrganizer').textContent = organizer;
+  document.getElementById('summaryMode').textContent = isAccounts 
+    ? `Mode B (Generated Accounts: ${count} accounts)`
+    : 'Mode A (No Accounts - Default)';
   document.getElementById('summaryAppsCount').textContent = state.prohibitedApps.length;
   document.getElementById('summaryDomainsCount').textContent = state.restrictedDomains.length;
   document.getElementById('summaryOutput').textContent = `${outDir}/${id}/`;
 }
 
-// Event Listeners
 contestTitleInput.addEventListener('input', (e) => {
   contestIdInput.value = slugify(e.target.value);
 });
 
-// App tags manipulation
+participationModeSelect.addEventListener('change', () => {
+  const isGen = participationModeSelect.value === 'generated_accounts';
+  accountCountGroup.style.display = isGen ? 'block' : 'none';
+  accountsActionGroup.style.display = isGen ? 'block' : 'none';
+});
+
+previewAccountsBtn.addEventListener('click', async (e) => {
+  e.preventDefault();
+  const count = parseInt(accountCountInput.value || '50', 10);
+  const title = contestTitleInput.value || 'GOCUP 1';
+  const id = contestIdInput.value || 'gocup-1';
+
+  if (window.__TAURI__ && window.__TAURI__.core) {
+    try {
+      const res = await window.__TAURI__.core.invoke('generate_accounts_preview', {
+        contestTitle: title,
+        contestId: id,
+        count
+      });
+      if (res.success) {
+        state.generatedCsv = res.csv_content;
+        state.generatedHtml = res.html_content;
+        accountsPreviewArea.style.display = 'block';
+        accountsStatusBadge.textContent = `Generated ${res.count} secure accounts (Argon2id offline verifiers)`;
+      } else {
+        alert('Account generation failed: ' + res.error);
+      }
+    } catch (err) {
+      alert('IPC error: ' + err);
+    }
+  } else {
+    state.generatedCsv = `Contest Name,Contest ID,Participant Username,Password,Account UUID\n"${title}",${id},GOCUP-001,A7k2P9x4,00000000-0000-0000-0000-000000000001\n`;
+    state.generatedHtml = `<h1>${title} Credentials</h1><p>GOCUP-001: A7k2P9x4</p>`;
+    accountsPreviewArea.style.display = 'block';
+    accountsStatusBadge.textContent = `Generated ${count} preview accounts`;
+  }
+});
+
+function downloadTextFile(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+downloadCsvBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (state.generatedCsv) {
+    downloadTextFile(`${contestIdInput.value || 'contest'}_credentials.csv`, state.generatedCsv, 'text/csv');
+  }
+});
+
+downloadPrintableBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (state.generatedHtml) {
+    const win = window.open('', '_blank');
+    win.document.write(state.generatedHtml);
+    win.document.close();
+  }
+});
+
 addAppBtn.addEventListener('click', (e) => {
   e.preventDefault();
   const val = newAppInput.value.trim().toLowerCase();
@@ -128,7 +205,6 @@ appsContainer.addEventListener('click', (e) => {
   }
 });
 
-// Domain tags manipulation
 addDomainBtn.addEventListener('click', (e) => {
   e.preventDefault();
   const val = newDomainInput.value.trim().toLowerCase();
@@ -147,7 +223,6 @@ domainsContainer.addEventListener('click', (e) => {
   }
 });
 
-// Navigation buttons
 document.querySelectorAll('.next-step').forEach(btn => {
   btn.addEventListener('click', () => {
     const next = parseInt(btn.dataset.next, 10);
@@ -169,17 +244,18 @@ document.querySelectorAll('.nav-item').forEach(btn => {
   });
 });
 
-// Theme Toggle
 themeToggle.addEventListener('click', () => {
   const current = document.documentElement.getAttribute('data-theme');
   const next = current === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
 });
 
-// Build generation simulation / execution
 generateBtn.addEventListener('click', async () => {
   logsContainer.style.display = 'block';
   logOutput.textContent = `[INFO] Initializing Contest Generation Pipeline...\n`;
+
+  const isAccounts = participationModeSelect.value === 'generated_accounts';
+  const count = parseInt(accountCountInput.value || '50', 10);
 
   const params = {
     title: contestTitleInput.value || 'GOCUP 1',
@@ -192,7 +268,9 @@ generateBtn.addEventListener('click', async () => {
     supported_platforms: ['windows', 'linux', 'macos'],
     branding_theme: document.documentElement.getAttribute('data-theme') || 'dark',
     output_dir: './dist',
-    enable_cpp_compiler: document.getElementById('enableCppCompiler')?.checked || false
+    enable_cpp_compiler: document.getElementById('enableCppCompiler')?.checked || false,
+    participation_mode: isAccounts ? 'generated_accounts' : 'no_accounts',
+    account_count: isAccounts ? count : 0
   };
 
   if (window.__TAURI__ && window.__TAURI__.core) {
@@ -206,6 +284,9 @@ generateBtn.addEventListener('click', async () => {
         logOutput.textContent += `    Manifest:      ${res.manifest_path}\n`;
         logOutput.textContent += `    Checksums:     ${res.checksums_path}\n`;
         logOutput.textContent += `    Judge PrivKey: ${res.judge_private_key_path}\n`;
+        if (isAccounts) {
+          logOutput.textContent += `    Judge Creds:   ${res.root_dir}/judge/credentials.csv\n`;
+        }
         logOutput.textContent += `[INFO] Private decryption key quarantined in offline directory.\n`;
         logOutput.textContent += `[READY] All packages and verification instructions successfully emitted!\n`;
       } else {
@@ -215,19 +296,18 @@ generateBtn.addEventListener('click', async () => {
       logOutput.textContent += `[ERROR] Native IPC error: ${err}\n`;
     }
   } else {
-    // Browser preview mode
-    logOutput.textContent += `[INFO] Running in browser preview mode (Tauri IPC inactive)\n`;
-    logOutput.textContent += `[INFO] Generating contest UUID: ${crypto.randomUUID()}\n`;
-    logOutput.textContent += `[INFO] Generating Ed25519 Manifest Signing Keypair...\n`;
-    logOutput.textContent += `[INFO] Generating X25519 Judge Evidence Encryption Keypair...\n`;
-    logOutput.textContent += `[INFO] Signing contest manifest with Organizer Private Key...\n`;
+    logOutput.textContent += `[INFO] Running in browser preview mode\n`;
     logOutput.textContent += `[SUCCESS] dist/${contestIdInput.value}/ created with manifests, configuration, and checksums.\n`;
-    logOutput.textContent += `[INFO] Private decryption key safely quarantined in judge/keys/.\n`;
+    if (isAccounts) {
+      logOutput.textContent += `[INFO] Generated ${count} Argon2id participant credentials into judge/credentials.csv\n`;
+    }
     logOutput.textContent += `[READY] All packages and verification instructions successfully emitted!\n`;
   }
 });
 
-// Init
 initDateTimes();
 renderApps();
 renderDomains();
+if (window.replaceLucideIcons) {
+  window.replaceLucideIcons();
+}

@@ -129,6 +129,9 @@ mod tests {
             }],
             timeline: vec![],
             judge_notes: None,
+            authenticated_account_id: None,
+            declared_log_name: None,
+            participation_mode: warm_core::ParticipationMode::NoAccounts,
         };
 
         let summary = LocalAiSummarizer::summarize(&report);

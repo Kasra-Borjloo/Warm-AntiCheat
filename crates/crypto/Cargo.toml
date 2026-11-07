@@ -10,6 +10,7 @@ warm_core.workspace = true
 uuid.workspace = true
 sha2.workspace = true
 aes-gcm.workspace = true
+argon2.workspace = true
 x25519-dalek.workspace = true
 ed25519-dalek.workspace = true
 rand.workspace = true

@@ -63,7 +63,17 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libsqlite3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+          sudo apt-get install -y libsqlite3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev g++
+          echo "WARM_BUNDLED_TOOLCHAIN=/usr" >> $GITHUB_ENV
+      - name: Configure Windows Toolchain
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          if [ -d "C:/msys64/ucrt64" ]; then
+            echo "WARM_BUNDLED_TOOLCHAIN=C:/msys64/ucrt64" >> $GITHUB_ENV
+          elif [ -d "C:/msys64/mingw64" ]; then
+            echo "WARM_BUNDLED_TOOLCHAIN=C:/msys64/mingw64" >> $GITHUB_ENV
+          fi
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Run full test suite

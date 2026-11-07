@@ -34,6 +34,12 @@ pub enum WarmError {
 
     #[error("Verification error: {0}")]
     Verification(String),
+
+    #[error("Validation error: {0}")]
+    Validation(String),
+
+    #[error("Authentication error: {0}")]
+    Authentication(String),
 }
 
 pub type Result<T> = std::result::Result<T, WarmError>;

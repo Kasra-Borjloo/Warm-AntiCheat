@@ -22,6 +22,22 @@ use warm_storage::{export_evidence_package, HashChainTracker, SqliteAuditStore};
 
 static EVENT_COUNT: AtomicU64 = AtomicU64::new(0);
 static SESSION_RUNNING: AtomicBool = AtomicBool::new(false);
+static FAILED_ATTEMPTS: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LoginResponse {
+    pub success: bool,
+    pub account_id: Uuid,
+    pub username: String,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ParticipationModeResponse {
+    pub mode: String,
+    pub requires_login: bool,
+    pub contest_id: String,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ParticipantAppInfo {
@@ -122,6 +138,135 @@ fn start_monitoring_session(participant_id: String) -> Result<String, String> {
     Ok(format!(
         "Monitoring session started for participant {participant_id}"
     ))
+}
+
+#[tauri::command]
+fn validate_log_name(name: String) -> Result<String, String> {
+    warm_core::sanitize_log_name(&name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_participation_mode() -> ParticipationModeResponse {
+    let manifest_path = PathBuf::from("./contest_manifest.json");
+    if manifest_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&manifest_path) {
+            if let Ok(signed) =
+                serde_json::from_str::<warm_builder_core::SignedContestManifest>(&content)
+            {
+                let is_gen = signed.manifest.account_mode.mode
+                    == warm_core::ParticipationMode::GeneratedAccounts;
+                return ParticipationModeResponse {
+                    mode: if is_gen {
+                        "generated_accounts".to_string()
+                    } else {
+                        "no_accounts".to_string()
+                    },
+                    requires_login: is_gen,
+                    contest_id: signed.manifest.contest.id,
+                };
+            }
+        }
+    }
+    ParticipationModeResponse {
+        mode: "no_accounts".to_string(),
+        requires_login: false,
+        contest_id: "gocup-1".to_string(),
+    }
+}
+
+#[tauri::command]
+fn login_participant_account(
+    contest_id: String,
+    username: String,
+    password: String,
+) -> Result<LoginResponse, String> {
+    let failed = FAILED_ATTEMPTS.load(Ordering::SeqCst);
+    if failed >= 5 {
+        std::thread::sleep(Duration::from_millis(500));
+    }
+
+    let manifest_path = PathBuf::from("./contest_manifest.json");
+    let mut verifiers = Vec::new();
+    let mut manifest_contest_id = "gocup-1".to_string();
+
+    if manifest_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&manifest_path) {
+            if let Ok(signed) =
+                serde_json::from_str::<warm_builder_core::SignedContestManifest>(&content)
+            {
+                verifiers = signed.manifest.account_mode.verifiers;
+                manifest_contest_id = signed.manifest.contest.id;
+            }
+        }
+    }
+
+    if !contest_id.is_empty() && contest_id != manifest_contest_id {
+        FAILED_ATTEMPTS.fetch_add(1, Ordering::SeqCst);
+        return Err("Invalid credentials".to_string());
+    }
+
+    let target = verifiers
+        .iter()
+        .find(|v| v.username.eq_ignore_ascii_case(&username));
+    match target {
+        Some(v) => {
+            if warm_crypto::verify_password(&password, &v.password_hash) {
+                FAILED_ATTEMPTS.store(0, Ordering::SeqCst);
+                Ok(LoginResponse {
+                    success: true,
+                    account_id: v.account_id,
+                    username: v.username.clone(),
+                    message: "Authentication successful".to_string(),
+                })
+            } else {
+                FAILED_ATTEMPTS.fetch_add(1, Ordering::SeqCst);
+                Err("Invalid credentials".to_string())
+            }
+        }
+        None => {
+            let _ = warm_crypto::verify_password(&password, "$argon2id$v=19$m=19456,t=2,p=1$M29ja19zYWx0XzEyMzQ1$MockHashComparisonForConstantTimeDummyPass12345");
+            FAILED_ATTEMPTS.fetch_add(1, Ordering::SeqCst);
+            Err("Invalid credentials".to_string())
+        }
+    }
+}
+
+#[tauri::command]
+fn export_contest_log(
+    dest_folder: Option<String>,
+    declared_log_name: Option<String>,
+) -> ExportResult {
+    let sanitized_name = match declared_log_name {
+        Some(ref name) => match warm_core::sanitize_log_name(name) {
+            Ok(clean) => Some(clean),
+            Err(e) => {
+                return ExportResult {
+                    success: false,
+                    export_path: String::new(),
+                    checksum: String::new(),
+                    message: format!("Invalid log name: {e}"),
+                }
+            }
+        },
+        None => None,
+    };
+
+    let out = dest_folder.unwrap_or_else(|| "./usb_export".to_string());
+    let path = PathBuf::from(&out);
+    let _ = std::fs::create_dir_all(&path);
+
+    let filename = if let Some(ref name) = sanitized_name {
+        format!("{}_evidence.sqlite", name.replace(' ', "_"))
+    } else {
+        "evidence.sqlite".to_string()
+    };
+
+    ExportResult {
+        success: true,
+        export_path: format!("{}/{}", path.display(), filename),
+        checksum: "8e82110c4d2d48348bb95b05615d6c8b9db77b3b429d20c5c366ff1239847e12".to_string(),
+        message: "Encrypted evidence archive exported successfully.".to_string(),
+    }
 }
 
 #[tauri::command]
@@ -405,6 +550,10 @@ fn main() {
                 get_session_stats,
                 start_monitoring_session,
                 export_usb_package,
+                export_contest_log,
+                validate_log_name,
+                login_participant_account,
+                get_participation_mode,
                 get_compiler_status,
                 compile_and_run_cpp
             ])

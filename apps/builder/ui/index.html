@@ -8,13 +8,12 @@
 </head>
 <body>
   <div class="app-layout">
-    <!-- Sidebar Navigation -->
     <aside class="sidebar">
       <div class="brand">
-        <div class="logo-shield">🛡️</div>
+        <div class="logo-shield" data-lucide="shield" data-size="30"></div>
         <div class="brand-text">
           <h2>Warm-AntiCheat</h2>
-          <span class="subtext">Contest Builder v0.1.0</span>
+          <span class="subtext">Contest Builder v0.3.0</span>
         </div>
       </div>
 
@@ -29,7 +28,7 @@
         </button>
         <button class="nav-item" data-step="3">
           <span class="step-num">3</span>
-          <span class="step-label">Platforms & Branding</span>
+          <span class="step-label">Platforms &amp; Branding</span>
         </button>
         <button class="nav-item" data-step="4">
           <span class="step-num">4</span>
@@ -38,24 +37,28 @@
       </nav>
 
       <div class="sidebar-footer">
-        <button id="themeToggle" class="btn btn-secondary btn-sm">Toggle Light/Dark</button>
+        <button id="themeToggle" class="btn btn-secondary btn-sm">
+          <span data-lucide="sun" data-size="16"></span>
+          <span>Toggle Theme</span>
+        </button>
       </div>
     </aside>
 
-    <!-- Main Content Area -->
     <main class="main-content">
       <header class="content-header">
         <h1 id="pageTitle">Contest Configuration Wizard</h1>
         <div class="header-badges">
           <span class="badge badge-outline" id="contestUuidBadge">UUID: Auto-generated</span>
-          <span class="badge badge-success">Offline Engine</span>
+          <span class="badge badge-success"><span data-lucide="lock" data-size="14"></span> Offline Engine</span>
         </div>
       </header>
 
-      <!-- Step 1: Contest Details -->
       <section class="wizard-step active" id="step1">
         <div class="card">
-          <h3>Basic Contest Information</h3>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <span data-lucide="settings" data-size="22"></span>
+            <h3>Basic Contest Information</h3>
+          </div>
           <p class="description">Define the competition name, organization, and scheduled time window.</p>
           
           <div class="form-grid">
@@ -90,38 +93,79 @@
               <input type="datetime-local" id="endTime" required>
             </div>
           </div>
+        </div>
 
-          <div class="step-actions">
-            <button class="btn btn-primary next-step" data-next="2">Next: Security Policies &rarr;</button>
+        <div class="card mt-4">
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <span data-lucide="users" data-size="22"></span>
+            <h3>Participant Accounts Mode</h3>
+          </div>
+          <p class="description">Select between unauthenticated sessions (Mode A) or pre-generated 8-character accounts (Mode B).</p>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="participationMode">Participation Mode</label>
+              <select id="participationMode">
+                <option value="no_accounts" selected>Mode A — No Accounts (Default: self-declared name on export)</option>
+                <option value="generated_accounts">Mode B — Generated Participant Accounts (Offline Argon2id)</option>
+              </select>
+            </div>
+
+            <div class="form-group" id="accountCountGroup" style="display: none;">
+              <label for="accountCount">Number of Participant Accounts</label>
+              <input type="number" id="accountCount" value="50" min="1" max="10000">
+            </div>
+          </div>
+
+          <div id="accountsActionGroup" style="display: none; margin-top: 1rem;">
+            <button class="btn btn-secondary" id="previewAccountsBtn">
+              <span data-lucide="key" data-size="16"></span>
+              <span>Generate &amp; Review Credentials</span>
+            </button>
+            <div id="accountsPreviewArea" style="margin-top: 0.75rem; display: none;">
+              <span class="badge badge-success" id="accountsStatusBadge"></span>
+              <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+                <button class="btn btn-secondary btn-sm" id="downloadCsvBtn">
+                  <span data-lucide="download" data-size="14"></span>
+                  <span>Export CSV</span>
+                </button>
+                <button class="btn btn-secondary btn-sm" id="downloadPrintableBtn">
+                  <span data-lucide="file-text" data-size="14"></span>
+                  <span>Printable Sheet</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="step-actions mt-4">
+            <button class="btn btn-primary next-step" data-next="2">Next: Security Policies <span data-lucide="chevron-right" data-size="16"></span></button>
           </div>
         </div>
       </section>
 
-      <!-- Step 2: Security Policies -->
       <section class="wizard-step" id="step2">
         <div class="card">
-          <h3>Prohibited Applications & Restricted Domains</h3>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <span data-lucide="shield-check" data-size="22"></span>
+            <h3>Prohibited Applications &amp; Restricted Domains</h3>
+          </div>
           <p class="description">Configure which process executables and online domains trigger policy events.</p>
 
           <div class="policy-section">
-            <h4>Prohibited Executables (Local AI & Inference Runtimes)</h4>
-            <div class="tags-input-container" id="appsContainer">
-              <!-- Dynamically populated tags -->
-            </div>
+            <h4>Prohibited Executables (Local AI &amp; Inference Runtimes)</h4>
+            <div class="tags-input-container" id="appsContainer"></div>
             <div class="input-with-btn">
               <input type="text" id="newAppInput" placeholder="Add executable (e.g. ollama.exe)">
-              <button class="btn btn-secondary" id="addAppBtn">+ Add Application</button>
+              <button class="btn btn-secondary" id="addAppBtn"><span data-lucide="plus" data-size="16"></span> Add Application</button>
             </div>
           </div>
 
           <div class="policy-section mt-4">
             <h4>Restricted Online Domains</h4>
-            <div class="tags-input-container" id="domainsContainer">
-              <!-- Dynamically populated tags -->
-            </div>
+            <div class="tags-input-container" id="domainsContainer"></div>
             <div class="input-with-btn">
               <input type="text" id="newDomainInput" placeholder="Add domain (e.g. chatgpt.com)">
-              <button class="btn btn-secondary" id="addDomainBtn">+ Add Domain</button>
+              <button class="btn btn-secondary" id="addDomainBtn"><span data-lucide="plus" data-size="16"></span> Add Domain</button>
             </div>
           </div>
 
@@ -137,25 +181,30 @@
           </div>
 
           <div class="policy-section mt-4" style="background: rgba(14, 165, 233, 0.05); border: 1px solid rgba(14, 165, 233, 0.2); border-radius: 8px; padding: 1rem;">
-            <h4>Built-in Offline C++ Compiler (GNU G++ C++23)</h4>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+              <span data-lucide="file-code" data-size="20"></span>
+              <h4>Built-in Offline C++ Compiler (GNU G++ C++23)</h4>
+            </div>
             <p class="description">Bundle a complete, self-contained offline C++23 compiler and &lt;bits/stdc++.h&gt; toolchain directly into participant client packages.</p>
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 600;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 600; margin-top: 0.5rem;">
               <input type="checkbox" id="enableCppCompiler">
               <span>Enable Built-in C++ Compiler (Default: Disabled)</span>
             </label>
           </div>
 
-          <div class="step-actions">
-            <button class="btn btn-secondary prev-step" data-prev="1">&larr; Back</button>
-            <button class="btn btn-primary next-step" data-next="3">Next: Platforms & Branding &rarr;</button>
+          <div class="step-actions mt-4">
+            <button class="btn btn-secondary prev-step" data-prev="1"><span data-lucide="chevron-left" data-size="16"></span> Back</button>
+            <button class="btn btn-primary next-step" data-next="3">Next: Platforms &amp; Branding <span data-lucide="chevron-right" data-size="16"></span></button>
           </div>
         </div>
       </section>
 
-      <!-- Step 3: Platforms & Branding -->
       <section class="wizard-step" id="step3">
         <div class="card">
-          <h3>Target Platforms & Distribution Configuration</h3>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <span data-lucide="cpu" data-size="22"></span>
+            <h3>Target Platforms &amp; Distribution Configuration</h3>
+          </div>
           <p class="description">Select supported operating systems and interface styling.</p>
 
           <div class="checkbox-group">
@@ -163,7 +212,7 @@
               <input type="checkbox" id="platWin" checked>
               <div class="checkbox-card-content">
                 <strong>Windows</strong>
-                <span>x86_64 & ARM64 (.exe / .msi)</span>
+                <span>x86_64 &amp; ARM64 (.exe / .msi)</span>
               </div>
             </label>
 
@@ -171,7 +220,7 @@
               <input type="checkbox" id="platLinux" checked>
               <div class="checkbox-card-content">
                 <strong>Linux</strong>
-                <span>x86_64 & aarch64 (AppImage / .deb)</span>
+                <span>x86_64 &amp; aarch64 (AppImage / .deb)</span>
               </div>
             </label>
 
@@ -179,7 +228,7 @@
               <input type="checkbox" id="platMac" checked>
               <div class="checkbox-card-content">
                 <strong>macOS</strong>
-                <span>Universal Binary (Apple Silicon & Intel DMG)</span>
+                <span>Universal Binary (Apple Silicon &amp; Intel DMG)</span>
               </div>
             </label>
           </div>
@@ -198,45 +247,52 @@
             </div>
           </div>
 
-          <div class="step-actions">
-            <button class="btn btn-secondary prev-step" data-prev="2">&larr; Back</button>
-            <button class="btn btn-primary next-step" data-next="4">Next: Review & Generate &rarr;</button>
+          <div class="step-actions mt-4">
+            <button class="btn btn-secondary prev-step" data-prev="2"><span data-lucide="chevron-left" data-size="16"></span> Back</button>
+            <button class="btn btn-primary next-step" data-next="4">Next: Review &amp; Generate <span data-lucide="chevron-right" data-size="16"></span></button>
           </div>
         </div>
       </section>
 
-      <!-- Step 4: Review & Generate -->
       <section class="wizard-step" id="step4">
         <div class="card">
-          <h3>Generate Contest Distribution Package</h3>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <span data-lucide="package" data-size="22"></span>
+            <h3>Generate Contest Distribution Package</h3>
+          </div>
           <p class="description">Generate cryptographic keys, sign contest manifests, and build packages.</p>
 
           <div class="summary-box">
             <div class="summary-item"><strong>Title:</strong> <span id="summaryTitle">GOCUP 1</span></div>
             <div class="summary-item"><strong>Identifier:</strong> <span id="summaryId">gocup-1</span></div>
             <div class="summary-item"><strong>Organizer:</strong> <span id="summaryOrganizer">Sharif University Computer Society</span></div>
+            <div class="summary-item"><strong>Participation Mode:</strong> <span id="summaryMode">Mode A (No Accounts)</span></div>
             <div class="summary-item"><strong>Prohibited Executables:</strong> <span id="summaryAppsCount">16</span> rules</div>
             <div class="summary-item"><strong>Restricted Domains:</strong> <span id="summaryDomainsCount">11</span> domains</div>
             <div class="summary-item"><strong>Output Directory:</strong> <span id="summaryOutput">./dist/gocup-1/</span></div>
           </div>
 
           <div class="build-action-box">
-            <button class="btn btn-success btn-lg" id="generateBtn">🚀 Generate Contest Package</button>
+            <button class="btn btn-success btn-lg" id="generateBtn">
+              <span data-lucide="package" data-size="20"></span>
+              <span>Generate Contest Package</span>
+            </button>
           </div>
 
           <div class="build-logs-container" id="logsContainer" style="display: none;">
-            <h4>Build Output & Execution Logs</h4>
+            <h4>Build Output &amp; Execution Logs</h4>
             <pre class="logs-console" id="logOutput"></pre>
           </div>
 
-          <div class="step-actions">
-            <button class="btn btn-secondary prev-step" data-prev="3">&larr; Back</button>
+          <div class="step-actions mt-4">
+            <button class="btn btn-secondary prev-step" data-prev="3"><span data-lucide="chevron-left" data-size="16"></span> Back</button>
           </div>
         </div>
       </section>
     </main>
   </div>
 
+  <script src="icons.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

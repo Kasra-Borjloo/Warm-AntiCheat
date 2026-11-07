@@ -19,15 +19,23 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: warm-anticheat-windows-x86_64.zip
+            platform: windows
+            arch: x86_64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact_name: warm-anticheat-linux-x86_64.tar.gz
+            platform: linux
+            arch: x86_64
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: warm-anticheat-macos-arm64.tar.gz
+            platform: macos
+            arch: aarch64
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: warm-anticheat-macos-x86_64.tar.gz
+            platform: macos
+            arch: x86_64
 
     steps:
       - uses: actions/checkout@v4
@@ -90,17 +98,51 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-artifacts
 
-      - name: Generate Consolidated Checksums and SBOM
+      - name: Generate Consolidated Checksums, Manifest, and SBOM
         run: |
           cd release-artifacts
           find . -type f \( -name "*.zip" -o -name "*.tar.gz" \) -exec sha256sum {} + > SHA256SUMS.txt
           cat SHA256SUMS.txt
-          echo '{"spdxVersion":"SPDX-2.3","name":"Warm-AntiCheat","packages":[{"name":"warm-anticheat","versionInfo":"0.1.0","licenseConcluded":"GPL-3.0-only"}]}' > sbom.spdx.json
+
+          node -e '
+            const fs = require("fs");
+            const checksums = fs.readFileSync("SHA256SUMS.txt", "utf8").trim().split("\n");
+            const artifacts = checksums.map(line => {
+              const parts = line.trim().split(/\s+/);
+              return { sha256: parts[0], path: parts[1] };
+            });
+            const manifest = {
+              release: process.env.GITHUB_REF_NAME || "v0.3.0",
+              project: "Warm-AntiCheat",
+              timestamp: new Date().toISOString(),
+              artifacts,
+              supported_platforms: [
+                "Windows (x86_64, Windows 10/11)",
+                "Linux (x86_64, Ubuntu 20.04+, Debian 11+, Fedora 36+)",
+                "macOS (Apple Silicon M1/M2/M3 & Intel x86_64, macOS 12+)"
+              ],
+              unsupported_platforms: [
+                "32-bit x86 architectures",
+                "Solaris / illumos",
+                "FreeBSD / OpenBSD (untested)",
+                "macOS 10.15 Catalina and earlier"
+              ],
+              security: {
+                offline_only: true,
+                authenticode_ready: true,
+                smartscreen_compatible: true
+              }
+            };
+            fs.writeFileSync("release-manifest.json", JSON.stringify(manifest, null, 2));
+          '
+
+          echo '{"spdxVersion":"SPDX-2.3","name":"Warm-AntiCheat","packages":[{"name":"warm-anticheat","versionInfo":"0.3.0","licenseConcluded":"GPL-3.0-only"}]}' > sbom.spdx.json
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -109,6 +151,7 @@ jobs:
             release-artifacts/**/*.zip
             release-artifacts/**/*.tar.gz
             release-artifacts/SHA256SUMS.txt
+            release-artifacts/release-manifest.json
             release-artifacts/sbom.spdx.json
           draft: false
           prerelease: false

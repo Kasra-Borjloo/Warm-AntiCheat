@@ -3,15 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title id="windowTitle">GOCUP 1 | Participant Client</title>
+  <title id="windowTitle">Warm-AntiCheat | Participant Client</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="client-container">
-    <!-- Top Header -->
     <header class="client-header">
       <div class="header-branding">
-        <span class="shield-icon">🛡️</span>
+        <span class="shield-icon" data-lucide="shield" data-size="28"></span>
         <div>
           <h1 id="contestHeaderTitle">GOCUP 1</h1>
           <span class="organizer-badge" id="organizerName">Sharif University Computer Society</span>
@@ -19,24 +18,54 @@
       </div>
       <div class="header-status">
         <span class="status-indicator status-idle" id="sessionStatusIndicator"></span>
-        <span class="status-text" id="sessionStatusText">Awaiting Enrollment</span>
+        <span class="status-text" id="sessionStatusText">Awaiting Session</span>
       </div>
     </header>
 
-    <!-- Main Navigation Tabs -->
     <nav class="client-tabs">
-      <button class="tab-btn active" data-tab="sessionTab">Competition Session</button>
-      <button class="tab-btn" data-tab="compilerTab" id="compilerNavBtn">Built-in C++ Compiler</button>
-      <button class="tab-btn" data-tab="rulesTab">Competition Rules</button>
-      <button class="tab-btn" data-tab="privacyTab">Privacy & Disclosure</button>
-      <button class="tab-btn" data-tab="exportTab">Export Evidence</button>
+      <button class="tab-btn active" data-tab="sessionTab"><span data-lucide="play" data-size="16"></span> Competition Session</button>
+      <button class="tab-btn" data-tab="compilerTab" id="compilerNavBtn"><span data-lucide="file-code" data-size="16"></span> Built-in C++ Compiler</button>
+      <button class="tab-btn" data-tab="rulesTab"><span data-lucide="file-text" data-size="16"></span> Competition Rules</button>
+      <button class="tab-btn" data-tab="privacyTab"><span data-lucide="shield-check" data-size="16"></span> Privacy &amp; Disclosure</button>
+      <button class="tab-btn" data-tab="exportTab"><span data-lucide="download" data-size="16"></span> Export Evidence</button>
     </nav>
 
-    <!-- Tab 1: Competition Session -->
     <main class="tab-content active" id="sessionTab">
-      <!-- Enrollment View (Shown before start) -->
+      <div class="card" id="loginCard" style="display: none;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+          <span data-lucide="lock" data-size="22"></span>
+          <h2>Participant Account Login</h2>
+        </div>
+        <p class="description">This competition requires contestant credentials. Authenticate locally using your assigned account.</p>
+
+        <div class="form-group">
+          <label for="loginUsername">Contest Username *</label>
+          <input type="text" id="loginUsername" placeholder="e.g. GOCUP-001" autocomplete="username">
+        </div>
+
+        <div class="form-group mt-2">
+          <label for="loginPassword">8-Character Password *</label>
+          <input type="password" id="loginPassword" placeholder="Enter assigned 8-character password" maxlength="16" autocomplete="current-password">
+        </div>
+
+        <div id="loginError" class="callout mt-2" style="display: none; background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; color: #f87171;">
+          <span data-lucide="alert-triangle" data-size="16"></span>
+          <span id="loginErrorText">Invalid credentials</span>
+        </div>
+
+        <div class="action-row mt-4">
+          <button class="btn btn-primary btn-lg" id="submitLoginBtn">
+            <span data-lucide="log-in" data-size="18"></span>
+            <span>Authenticate &amp; Enter Contest</span>
+          </button>
+        </div>
+      </div>
+
       <div class="card" id="enrollmentCard">
-        <h2>Participant Enrollment</h2>
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+          <span data-lucide="users" data-size="22"></span>
+          <h2>Participant Enrollment</h2>
+        </div>
         <p class="description">Enter your assigned credentials to begin monitoring and join the contest session.</p>
 
         <div class="form-group">
@@ -50,11 +79,13 @@
         </div>
 
         <div class="action-row mt-4">
-          <button class="btn btn-primary btn-lg" id="startSessionBtn">▶ Start Competition Session</button>
+          <button class="btn btn-primary btn-lg" id="startSessionBtn">
+            <span data-lucide="play" data-size="18"></span>
+            <span>Start Competition Session</span>
+          </button>
         </div>
       </div>
 
-      <!-- Active Monitoring View (Shown during contest) -->
       <div class="card" id="activeSessionCard" style="display: none;">
         <div class="session-stats-grid">
           <div class="stat-box">
@@ -71,7 +102,7 @@
           </div>
           <div class="stat-box">
             <span class="stat-label">Hash Chain</span>
-            <span class="stat-value text-success">Verified Link</span>
+            <span class="stat-value text-success"><span data-lucide="check-circle" data-size="16"></span> Verified</span>
           </div>
         </div>
 
@@ -95,12 +126,14 @@
         </div>
 
         <div class="action-row mt-4">
-          <button class="btn btn-danger" id="concludeSessionBtn">⏹ Conclude Session</button>
+          <button class="btn btn-danger" id="concludeSessionBtn">
+            <span data-lucide="square" data-size="18"></span>
+            <span>Conclude Session</span>
+          </button>
         </div>
       </div>
     </main>
 
-    <!-- Tab 2: Rules -->
     <div class="tab-content" id="rulesTab">
       <div class="card">
         <h2>Official Competition Rules</h2>
@@ -113,15 +146,14 @@
       </div>
     </div>
 
-    <!-- Tab 3: Privacy & Disclosure -->
     <div class="tab-content" id="privacyTab">
       <div class="card">
-        <h2>Privacy & Data Disclosure Notice</h2>
+        <h2>Privacy &amp; Data Disclosure Notice</h2>
         <p class="description">Warm-AntiCheat operates with complete transparency regarding monitored metrics.</p>
 
         <div class="privacy-grid mt-2">
           <div class="privacy-col">
-            <h4 class="text-success">✔ What IS Recorded</h4>
+            <h4 class="text-success"><span data-lucide="check" data-size="16"></span> What IS Recorded</h4>
             <ul>
               <li>Process startup and shutdown events (PID, name)</li>
               <li>Prohibited AI runtime detection</li>
@@ -131,7 +163,7 @@
             </ul>
           </div>
           <div class="privacy-col">
-            <h4 class="text-danger">✖ What is NEVER Recorded</h4>
+            <h4 class="text-danger"><span data-lucide="x" data-size="16"></span> What is NEVER Recorded</h4>
             <ul>
               <li>No keystrokes or arbitrary keyboard recording</li>
               <li>No webcam, microphone, or audio access</li>
@@ -148,13 +180,12 @@
       </div>
     </div>
 
-    <!-- Tab: Built-in C++ Compiler -->
     <div class="tab-content" id="compilerTab">
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <h2>Built-in C++23 Compiler & Runner</h2>
+          <h2>Built-in C++23 Compiler &amp; Runner</h2>
           <span class="badge text-success" id="toolchainBadge" style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.85rem;">
-            ✔ Bundled GNU G++ (C++23) &lt;bits/stdc++.h&gt;
+            <span data-lucide="check-circle" data-size="14"></span> Bundled GNU G++ (C++23) &lt;bits/stdc++.h&gt;
           </span>
         </div>
         <p class="description">Self-contained offline GNU G++ toolchain bundled with the client. Zero system dependencies or external compilers required.</p>
@@ -181,8 +212,14 @@ int main() {
         </div>
 
         <div class="action-row mt-2" style="display: flex; gap: 0.75rem;">
-          <button class="btn btn-primary btn-lg" id="compileRunBtn">⚡ Compile &amp; Run (g++ -std=c++23 -O2)</button>
-          <button class="btn btn-secondary btn-lg" id="stopExecutionBtn" style="color: #ef4444;">⏹ Stop Execution</button>
+          <button class="btn btn-primary btn-lg" id="compileRunBtn">
+            <span data-lucide="play" data-size="18"></span>
+            <span>Compile &amp; Run (g++ -std=c++23 -O2)</span>
+          </button>
+          <button class="btn btn-secondary btn-lg" id="stopExecutionBtn" style="color: #ef4444;">
+            <span data-lucide="square" data-size="18"></span>
+            <span>Stop Execution</span>
+          </button>
         </div>
 
         <div class="form-group mt-4">
@@ -197,10 +234,12 @@ int main() {
       </div>
     </div>
 
-    <!-- Tab 4: Export Evidence -->
     <div class="tab-content" id="exportTab">
       <div class="card">
-        <h2>Export Sealed Evidence Archive</h2>
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+          <span data-lucide="download" data-size="22"></span>
+          <h2>Export Sealed Evidence Archive</h2>
+        </div>
         <p class="description">Export your competition audit log to a USB drive or local directory for judge evaluation.</p>
 
         <div class="form-group mt-2">
@@ -209,7 +248,10 @@ int main() {
         </div>
 
         <div class="action-row mt-4">
-          <button class="btn btn-success btn-lg" id="exportBtn">💾 Export Evidence Package</button>
+          <button class="btn btn-success btn-lg" id="exportBtn">
+            <span data-lucide="download" data-size="18"></span>
+            <span>Export Evidence Package</span>
+          </button>
         </div>
 
         <div class="callout mt-4" id="exportResult" style="display: none;">
@@ -219,6 +261,30 @@ int main() {
     </div>
   </div>
 
+  <div id="exportModalOverlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; display: flex; align-items: center; justify-content: center;">
+    <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; width: 90%; max-width: 440px; padding: 1.5rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+      <h3 style="margin-top: 0; color: #f8fafc; display: flex; align-items: center; gap: 0.5rem;">
+        <span data-lucide="download" data-size="20"></span>
+        <span>Export Contest Log</span>
+      </h3>
+      <p style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 1rem;">
+        Please enter a name or participant handle for this log export archive:
+      </p>
+
+      <div class="form-group">
+        <label for="modalLogNameInput" style="font-size: 0.85rem; color: #cbd5e1;">Log Name:</label>
+        <input type="text" id="modalLogNameInput" placeholder="e.g. Kasra_Session_1" style="width: 100%; padding: 0.5rem; border-radius: 4px; background: #0f172a; border: 1px solid #475569; color: #fff;">
+        <span id="modalLogNameError" style="display: none; color: #ef4444; font-size: 0.8rem; margin-top: 0.25rem;"></span>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.5rem;">
+        <button class="btn btn-secondary" id="modalCancelBtn">Cancel</button>
+        <button class="btn btn-success" id="modalConfirmExportBtn">Export</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="icons.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -5,7 +5,6 @@ use warm_core::{Contest, Result, WarmError};
 use warm_crypto::{verify_signature_hex, ManifestSigningKeypair};
 use warm_policies::MonitoringPolicy;
 
-/// Canonical unsigned contest manifest.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ContestManifest {
     pub contest: Contest,
@@ -14,6 +13,8 @@ pub struct ContestManifest {
     pub manifest_signing_key_pub_hex: String,
     pub client_binary_checksums: BTreeMap<String, String>,
     pub created_at: DateTime<Utc>,
+    #[serde(default)]
+    pub account_mode: warm_core::AccountModeConfig,
 }
 
 impl ContestManifest {
@@ -82,6 +83,7 @@ mod tests {
             manifest_signing_key_pub_hex: signing_keypair.public_key_hex(),
             client_binary_checksums: checksums,
             created_at: Utc::now(),
+            account_mode: warm_core::AccountModeConfig::default(),
         };
 
         let signed = manifest.sign(&signing_keypair).unwrap();

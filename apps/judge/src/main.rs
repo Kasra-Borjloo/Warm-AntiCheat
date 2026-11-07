@@ -25,6 +25,38 @@ pub struct AuditReportResponse {
     pub violations: Vec<String>,
     pub summary_text: String,
     pub ai_advisory: String,
+    pub authenticated_account_id: Option<String>,
+    pub declared_log_name: Option<String>,
+    pub participation_mode: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DuplicateAccountCheckResult {
+    pub has_duplicates: bool,
+    pub findings: Vec<String>,
+}
+
+#[tauri::command]
+fn check_duplicate_accounts(account_ids: Vec<String>) -> DuplicateAccountCheckResult {
+    use std::collections::HashMap;
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    for id in account_ids {
+        if !id.is_empty() {
+            *counts.entry(id).or_insert(0) += 1;
+        }
+    }
+    let mut findings = Vec::new();
+    for (id, count) in counts {
+        if count > 1 {
+            findings.push(format!(
+                "Account ID '{id}' was submitted across {count} separate participant archives."
+            ));
+        }
+    }
+    DuplicateAccountCheckResult {
+        has_duplicates: !findings.is_empty(),
+        findings,
+    }
 }
 
 #[tauri::command]
@@ -116,6 +148,9 @@ fn verify_evidence_db(
             "Verdict: {}. Facts: {:?}. Inferences: {:?}",
             ai.verdict, ai.verified_facts, ai.contextual_inferences
         ),
+        authenticated_account_id: report.authenticated_account_id.map(|u| u.to_string()),
+        declared_log_name: report.declared_log_name,
+        participation_mode: format!("{:?}", report.participation_mode),
     })
 }
 
@@ -220,7 +255,8 @@ fn main() {
             .invoke_handler(tauri::generate_handler![
                 get_judge_version,
                 verify_manifest_file,
-                verify_evidence_db
+                verify_evidence_db,
+                check_duplicate_accounts
             ])
             .run(tauri::generate_context!())
             .expect("Failed to run Warm-AntiCheat Judge Verifier Desktop Application");

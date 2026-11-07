@@ -1,4 +1,3 @@
-// Mock participants dataset for Judge Verifier UI
 const participantsData = {
   'team-42': {
     name: 'Team 42 (Alice & Bob)',
@@ -7,6 +6,9 @@ const participantsData = {
     totalEvents: 142,
     criticalFindings: 0,
     gaps: 0,
+    participationMode: 'GeneratedAccounts',
+    authenticatedAccountId: 'e01a88b1-36aa-4251-bb38-662589254301',
+    declaredLogName: null,
     findings: [],
     aiSummary: {
       facts: [
@@ -22,11 +24,11 @@ const participantsData = {
       ]
     },
     timeline: [
-      { seq: 1, time: '2026-11-07T09:00:00Z', cat: 'SystemLifecycle', details: 'ApplicationLaunch: Warm-AntiCheat v0.1.0 on Windows', hash: 'e291...3a1' },
-      { seq: 2, time: '2026-11-07T09:00:05Z', cat: 'Network', details: 'Connected to WiFi: "Sharif-Guest" (Interface: wlan0)', hash: 'a149...8c2' },
-      { seq: 3, time: '2026-11-07T09:00:15Z', cat: 'SystemLifecycle', details: 'Heartbeat tick #1 (All monitors operational)', hash: '9b04...5f7' },
-      { seq: 4, time: '2026-11-07T09:00:20Z', cat: 'Process', details: 'Process started: code.exe (PID: 4120)', hash: '4cb1...210' },
-      { seq: 5, time: '2026-11-07T09:00:30Z', cat: 'Process', details: 'Process started: rustc.exe (PID: 5192)', hash: 'f782...aa4' },
+      { seq: 1, time: '2026-11-07T09:00:00Z', cat: 'Auth', details: 'Participant Login: Username GOCUP-001 (Argon2id offline verification success)', hash: 'a101...99f' },
+      { seq: 2, time: '2026-11-07T09:00:05Z', cat: 'SystemLifecycle', details: 'ApplicationLaunch: Warm-AntiCheat v0.3.0 on Windows', hash: 'e291...3a1' },
+      { seq: 3, time: '2026-11-07T09:00:10Z', cat: 'Network', details: 'Connected to WiFi: "Sharif-Guest" (Interface: wlan0)', hash: 'a149...8c2' },
+      { seq: 4, time: '2026-11-07T09:00:15Z', cat: 'SystemLifecycle', details: 'Heartbeat tick #1 (All monitors operational)', hash: '9b04...5f7' },
+      { seq: 5, time: '2026-11-07T09:00:20Z', cat: 'Process', details: 'Process started: code.exe (PID: 4120)', hash: '4cb1...210' },
       { seq: 6, time: '2026-11-07T09:15:20Z', cat: 'Compiler', details: 'Built-in C++23 Compilation: solution.cpp (Success, Exit: 0)', hash: 'c901...4d8' }
     ],
     compilerActivity: [
@@ -34,7 +36,7 @@ const participantsData = {
         timestamp: '2026-11-07T09:15:20Z',
         sourceFile: 'solution.cpp',
         sourceSha256: '8e82110c4d2d48348bb95b05615d6c8b9db77b3b429d20c5c366ff1239847e12',
-        compilerVersion: 'GNU G++ 16.2.0 (C++23)',
+        compilerVersion: 'GNU G++ 14.2.0 (C++23)',
         compilationArgs: ['-std=c++23', '-O2', '-pipe', 'solution.cpp', '-o', 'bin.exe'],
         diagnostics: 'Compilation successful. 0 warnings.',
         executableHash: 'a41d998124e5a201c8012bbfa32c0281b9201948291048291048291048291048',
@@ -51,6 +53,9 @@ const participantsData = {
     totalEvents: 88,
     criticalFindings: 1,
     gaps: 0,
+    participationMode: 'NoAccounts',
+    authenticatedAccountId: null,
+    declaredLogName: 'Charlie_USB_1',
     findings: [
       {
         severity: 'critical',
@@ -63,63 +68,27 @@ const participantsData = {
     aiSummary: {
       facts: [
         'Total audit events verified in SHA-256 hash chain: 88',
-        'Hash chain cryptographic integrity status: INTACT',
-        'CRITICAL FINDING: Prohibited application "ollama.exe" (PID: 8840) launched at sequence 44 (2026-11-07T10:15:32Z)'
+        'Verified critical violation: Execution of prohibited Ollama local model inference runtime (PID: 8840) at 10:15:32 UTC',
+        'Self-declared log export handle: "Charlie_USB_1"'
       ],
       inferences: [
-        'High probability of unauthorized local LLM code generation. The process was executed for 14 minutes before being manually terminated.'
+        'Participant accessed prohibited AI generative models while attempting Algorithmic Problem B.'
       ],
       recommendations: [
-        'Escalate to Lead Jury for official disqualification review and participant interview.'
+        'Disqualification recommended under Competition Rule §4.1.'
       ]
     },
     timeline: [
-      { seq: 42, time: '2026-11-07T10:14:00Z', cat: 'SystemLifecycle', details: 'Heartbeat tick #38', hash: 'c901...33d' },
-      { seq: 43, time: '2026-11-07T10:15:00Z', cat: 'Process', details: 'Process started: cmd.exe (PID: 8812)', hash: 'bb82...19a' },
-      { seq: 44, time: '2026-11-07T10:15:32Z', cat: 'Process', details: 'PROHIBITED: Process started: ollama.exe (PID: 8840)', hash: 'dd14...780' },
-      { seq: 45, time: '2026-11-07T10:29:45Z', cat: 'Process', details: 'Process terminated: ollama.exe (PID: 8840)', hash: '517a...b8c' }
-    ]
-  },
-  'team-07': {
-    name: 'Team 07 (Dave)',
-    verdict: 'REVIEW REQUIRED',
-    hashChain: 'ANOMALY DETECTED',
-    totalEvents: 45,
-    criticalFindings: 0,
-    gaps: 1,
-    findings: [
-      {
-        severity: 'warning',
-        title: 'Monitoring Interruption / Sleep Gap',
-        desc: 'Unexplained time gap of 420s (7 minutes) detected between sequence 21 and 22.',
-        seqs: [21, 22],
-        time: '2026-11-07T09:45:10Z'
-      }
+      { seq: 1, time: '2026-11-07T09:05:00Z', cat: 'SystemLifecycle', details: 'ApplicationLaunch: Warm-AntiCheat v0.3.0 on Linux', hash: '7c82...01e' },
+      { seq: 44, time: '2026-11-07T10:15:32Z', cat: 'Process', details: 'CRITICAL: Prohibited application executed: ollama.exe (PID: 8840)', hash: 'f91b...bb7' }
     ],
-    aiSummary: {
-      facts: [
-        'Total audit events verified in SHA-256 hash chain: 45',
-        'Hash chain cryptographic integrity status: INTACT, but has unexplained 7-minute monitoring gap'
-      ],
-      inferences: [
-        'Device may have gone into sleep mode or monitoring process was suspended. Verification required from proctor desk.'
-      ],
-      recommendations: [
-        'Conduct physical proctor inquiry regarding the observed 7-minute timeline gap.'
-      ]
-    },
-    timeline: [
-      { seq: 20, time: '2026-11-07T09:37:00Z', cat: 'SystemLifecycle', details: 'Heartbeat tick #20', hash: '88a1...12c' },
-      { seq: 21, time: '2026-11-07T09:38:00Z', cat: 'SystemLifecycle', details: 'SleepDetected: Device suspended / gap starts', hash: '33e1...78b' },
-      { seq: 22, time: '2026-11-07T09:45:00Z', cat: 'SystemLifecycle', details: 'WakeDetected: Monitoring resumed after 420s', hash: 'ff02...99a' }
-    ]
+    compilerActivity: []
   }
 };
 
 let currentParticipantKey = 'team-42';
-let currentCategoryFilter = 'all';
+let currentFilter = 'all';
 
-// DOM references
 const participantsList = document.getElementById('participantsList');
 const selectedParticipantTitle = document.getElementById('selectedParticipantTitle');
 const verdictBanner = document.getElementById('verdictBanner');
@@ -129,174 +98,215 @@ const statHashChain = document.getElementById('statHashChain');
 const statTotalEvents = document.getElementById('statTotalEvents');
 const statCriticalFindings = document.getElementById('statCriticalFindings');
 const statGaps = document.getElementById('statGaps');
+const findingsCard = document.getElementById('findingsCard');
 const findingsList = document.getElementById('findingsList');
 const aiSummaryBody = document.getElementById('aiSummaryBody');
 const timelineTbody = document.getElementById('timelineTbody');
 const themeToggle = document.getElementById('themeToggle');
+const saveDecisionBtn = document.getElementById('saveDecisionBtn');
+const compilerActivityContent = document.getElementById('compilerActivityContent');
+
+const accountMetadataCard = document.getElementById('accountMetadataCard');
+const participationModeBadge = document.getElementById('participationModeBadge');
+const accountDetailText = document.getElementById('accountDetailText');
+const duplicateAlertBadge = document.getElementById('duplicateAlertBadge');
 
 function renderParticipants() {
   participantsList.innerHTML = '';
   Object.keys(participantsData).forEach(key => {
     const p = participantsData[key];
-    const item = document.createElement('div');
-    item.className = `participant-item ${key === currentParticipantKey ? 'active' : ''}`;
-    item.dataset.key = key;
+    const card = document.createElement('div');
+    card.className = `participant-card ${key === currentParticipantKey ? 'active' : ''}`;
+    card.dataset.key = key;
 
-    let pillClass = 'pill-safe';
-    if (p.verdict === 'UNSAFE') pillClass = 'pill-unsafe';
-    if (p.verdict === 'REVIEW REQUIRED') pillClass = 'pill-review';
+    let verdictClass = 'verdict-safe';
+    if (p.verdict === 'UNSAFE') verdictClass = 'verdict-unsafe';
+    if (p.verdict === 'REVIEW REQUIRED') verdictClass = 'verdict-review';
 
-    item.innerHTML = `
-      <span class="p-name">${p.name}</span>
-      <span class="p-pill ${pillClass}">${p.verdict}</span>
+    card.innerHTML = `
+      <div class="participant-name">${p.name}</div>
+      <div class="participant-meta">
+        <span class="verdict-tag ${verdictClass}">${p.verdict}</span>
+        <span>${p.totalEvents} events</span>
+      </div>
     `;
 
-    item.addEventListener('click', () => {
-      currentParticipantKey = key;
-      renderParticipants();
+    card.addEventListener('click', () => {
       loadParticipant(key);
     });
 
-    participantsList.appendChild(item);
+    participantsList.appendChild(card);
   });
 }
 
 function loadParticipant(key) {
+  currentParticipantKey = key;
   const p = participantsData[key];
   if (!p) return;
 
+  document.querySelectorAll('.participant-card').forEach(c => {
+    c.classList.toggle('active', c.dataset.key === key);
+  });
+
+  selectedParticipantTitle.textContent = `${p.name} (Review)`;
   inspectorContent.style.display = 'block';
   verdictBanner.style.display = 'block';
-  selectedParticipantTitle.textContent = p.name;
-
-  // Verdict pill
   verdictPill.textContent = p.verdict;
-  verdictPill.className = 'verdict-pill';
-  if (p.verdict === 'SAFE') verdictPill.classList.add('pill-safe');
-  else if (p.verdict === 'UNSAFE') verdictPill.classList.add('pill-unsafe');
-  else verdictPill.classList.add('pill-review');
 
-  // Stats
+  verdictPill.className = 'verdict-pill';
+  if (p.verdict === 'SAFE') verdictPill.classList.add('verdict-safe');
+  else if (p.verdict === 'UNSAFE') verdictPill.classList.add('verdict-unsafe');
+  else verdictPill.classList.add('verdict-review');
+
   statHashChain.textContent = p.hashChain;
   statTotalEvents.textContent = p.totalEvents;
   statCriticalFindings.textContent = p.criticalFindings;
   statGaps.textContent = p.gaps;
 
-  // Findings
+  if (p.participationMode === 'GeneratedAccounts' || p.authenticatedAccountId) {
+    accountMetadataCard.style.display = 'block';
+    participationModeBadge.textContent = 'Mode B (Generated Accounts)';
+    accountDetailText.textContent = `Account UUID: ${p.authenticatedAccountId || 'Unknown'}`;
+  } else if (p.declaredLogName) {
+    accountMetadataCard.style.display = 'block';
+    participationModeBadge.textContent = 'Mode A (No Accounts)';
+    accountDetailText.textContent = `Self-declared handle: "${p.declaredLogName}" (Self-reported, unverified)`;
+  } else {
+    accountMetadataCard.style.display = 'none';
+  }
+
   findingsList.innerHTML = '';
   if (p.findings.length === 0) {
-    findingsList.innerHTML = '<p class="text-secondary" style="font-size: 13px;">No critical or warning findings observed.</p>';
+    findingsList.innerHTML = `<div style="color: #22c55e;"><span data-lucide="check-circle" data-size="16"></span> No violations or policy anomalies detected. All events adhere to contest parameters.</div>`;
   } else {
     p.findings.forEach(f => {
       const item = document.createElement('div');
-      item.className = `finding-item finding-${f.severity}`;
+      item.className = 'finding-item';
       item.innerHTML = `
-        <div class="finding-title">${f.title}</div>
-        <div class="finding-desc">${f.desc} (Seqs: ${f.seqs.join(', ')})</div>
+        <div class="finding-title" style="color: #ef4444;"><span data-lucide="alert-triangle" data-size="16"></span> ${f.title} (${f.time})</div>
+        <div class="finding-desc">${f.desc}</div>
+        <div class="finding-seqs">Supporting Audit Sequences: [${f.seqs.join(', ')}]</div>
       `;
       findingsList.appendChild(item);
     });
   }
 
-  // AI Advisory Body
   aiSummaryBody.innerHTML = `
     <div class="ai-section">
-      <strong>Verified Cryptographic Facts:</strong>
+      <h4><span data-lucide="check-circle" data-size="16"></span> Verified Forensic Facts (Deterministic)</h4>
       <ul>${p.aiSummary.facts.map(f => `<li>${f}</li>`).join('')}</ul>
     </div>
-    <div class="ai-section">
-      <strong>Contextual Inferences:</strong>
+    <div class="ai-section mt-2">
+      <h4><span data-lucide="info" data-size="16"></span> Contextual Inferences (Advisory)</h4>
       <ul>${p.aiSummary.inferences.map(i => `<li>${i}</li>`).join('')}</ul>
     </div>
-    <div class="ai-section">
-      <strong>Recommended Jury Action:</strong>
+    <div class="ai-section mt-2">
+      <h4><span data-lucide="shield" data-size="16"></span> Recommended Action</h4>
       <ul>${p.aiSummary.recommendations.map(r => `<li>${r}</li>`).join('')}</ul>
     </div>
   `;
 
-  // Compiler Activity Box
-  const compBox = document.getElementById('compilerActivityContent');
-  if (compBox) {
-    if (p.compilerActivity && p.compilerActivity.length > 0) {
-      compBox.innerHTML = p.compilerActivity.map(c => `
-        <div style="border-bottom: 1px solid #1e293b; padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
-          <div style="display: flex; justify-content: space-between; color: #38bdf8; margin-bottom: 0.25rem;">
-            <span><strong>Source:</strong> ${c.sourceFile} (SHA-256: ${c.sourceSha256.substring(0, 16)}...)</span>
-            <span>${c.timestamp}</span>
-          </div>
-          <div><strong>Compiler:</strong> ${c.compilerVersion} | <strong>Args:</strong> ${c.compilationArgs.join(' ')}</div>
-          <div><strong>Diagnostics:</strong> ${c.diagnostics}</div>
-          ${c.executableHash ? `<div><strong>Binary Hash:</strong> ${c.executableHash.substring(0, 16)}... | <strong>Exit Code:</strong> ${c.exitCode}</div>` : ''}
-          ${c.stdout ? `<div style="margin-top: 0.25rem; color: #4ade80;"><strong>Stdout:</strong> ${c.stdout}</div>` : ''}
-          <details style="margin-top: 0.5rem; cursor: pointer;">
-            <summary style="color: #94a3b8;">View Submitted Source Snapshot</summary>
-            <pre style="background: #0f172a; padding: 0.5rem; border-radius: 4px; margin-top: 0.25rem; color: #f8fafc; font-size: 0.85rem;">${c.sourceSnapshot}</pre>
-          </details>
-        </div>
-      `).join('');
-    } else {
-      compBox.innerHTML = `<span style="color: #64748b;">No built-in compiler attempts recorded for this participant. (Note: Absence does not indicate external compiler use).</span>`;
-    }
-  }
+  renderCompilerActivity(p);
+  renderTimeline(p);
 
-  renderTimeline(p.timeline);
+  if (window.replaceLucideIcons) {
+    window.replaceLucideIcons();
+  }
 }
 
-function renderTimeline(timeline) {
-  timelineTbody.innerHTML = '';
-  const filtered = currentCategoryFilter === 'all'
-    ? timeline
-    : timeline.filter(t => t.cat === currentCategoryFilter);
+function renderCompilerActivity(p) {
+  if (!compilerActivityContent) return;
+  if (!p.compilerActivity || p.compilerActivity.length === 0) {
+    compilerActivityContent.innerHTML = `<span style="color: #64748b;">No built-in compiler attempts recorded for this participant.</span>`;
+    return;
+  }
 
-  filtered.forEach(row => {
+  let html = '';
+  p.compilerActivity.forEach((c, idx) => {
+    html += `
+      <div style="border-bottom: 1px solid #1e293b; padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
+        <div style="color: #38bdf8; font-weight: bold;">Attempt #${idx + 1} - ${c.sourceFile} (${c.timestamp})</div>
+        <div style="color: #94a3b8; font-size: 0.8rem; margin: 0.2rem 0;">Source SHA-256: <code>${c.sourceSha256}</code></div>
+        <div style="color: #94a3b8; font-size: 0.8rem; margin: 0.2rem 0;">Compiler: ${c.compilerVersion} | Args: <code>${c.compilationArgs.join(' ')}</code></div>
+        <div style="color: #22c55e; font-size: 0.85rem;">Status: ${c.diagnostics}</div>
+        ${c.executableHash ? `<div style="color: #e2e8f0; font-size: 0.8rem;">Output Binary SHA-256: <code>${c.executableHash}</code> (Exit Code: ${c.exitCode})</div>` : ''}
+        ${c.stdout ? `<div style="background: #090d16; padding: 0.4rem; border-radius: 4px; margin-top: 0.4rem; color: #a5f3fc;">Stdout: ${c.stdout.trim()}</div>` : ''}
+      </div>
+    `;
+  });
+  compilerActivityContent.innerHTML = html;
+}
+
+function renderTimeline(p) {
+  timelineTbody.innerHTML = '';
+  const filtered = currentFilter === 'all'
+    ? p.timeline
+    : p.timeline.filter(t => t.cat === currentFilter);
+
+  if (filtered.length === 0) {
+    timelineTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #64748b;">No events matching filter "${currentFilter}".</td></tr>`;
+    return;
+  }
+
+  filtered.forEach(t => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>#${row.seq}</td>
-      <td class="font-mono">${row.time}</td>
-      <td><strong>${row.cat}</strong></td>
-      <td>${row.details}</td>
-      <td class="hash-cell">${row.hash}</td>
+      <td class="font-mono">${t.seq}</td>
+      <td class="font-mono text-muted">${t.time}</td>
+      <td><span class="badge badge-outline">${t.cat}</span></td>
+      <td>${t.details}</td>
+      <td class="font-mono text-muted">${t.hash}</td>
     `;
     timelineTbody.appendChild(tr);
   });
 }
 
-// Filter buttons
 document.querySelectorAll('.filter-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    currentCategoryFilter = btn.dataset.cat;
-    renderTimeline(participantsData[currentParticipantKey].timeline);
+    currentFilter = btn.dataset.cat;
+    const p = participantsData[currentParticipantKey];
+    if (p) renderTimeline(p);
   });
 });
 
-// Theme toggle
 themeToggle.addEventListener('click', () => {
   const current = document.documentElement.getAttribute('data-theme');
   const next = current === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
 });
 
-// Import Button
+saveDecisionBtn.addEventListener('click', () => {
+  const notes = document.getElementById('judgeNotes').value;
+  alert(`Verdict and notes for ${participantsData[currentParticipantKey].name} successfully recorded!`);
+});
+
 const importBtn = document.getElementById('importBtn');
 if (importBtn) {
   importBtn.addEventListener('click', async () => {
-    const dbPath = prompt('Enter path to participant evidence SQLite file:', './participant_audit.sqlite');
+    const dbPath = prompt('Enter path to participant evidence.sqlite:');
     if (!dbPath) return;
 
     if (window.__TAURI__ && window.__TAURI__.core) {
       try {
-        const res = await window.__TAURI__.core.invoke('verify_evidence_db', { dbPath: dbPath, keyPath: null });
+        const res = await window.__TAURI__.core.invoke('verify_evidence_db', {
+          dbPath,
+          keyPath: null
+        });
+
         const newKey = `import-${Date.now()}`;
         participantsData[newKey] = {
-          name: `Imported (${res.participant_id})`,
+          name: `${res.participant_id} (Imported)`,
           verdict: res.verdict,
           hashChain: 'VERIFIED (SHA-256)',
           totalEvents: res.total_events,
           criticalFindings: res.violations.length,
           gaps: 0,
-          findings: res.violations.map(v => ({ severity: 'critical', title: 'Security Finding', desc: v, seqs: [1], time: new Date().toISOString() })),
+          participationMode: res.participation_mode,
+          authenticatedAccountId: res.authenticated_account_id,
+          declaredLogName: res.declared_log_name,
+          findings: res.violations.map(v => ({ severity: 'critical', title: 'Violation', desc: v, seqs: [], time: '' })),
           aiSummary: {
             facts: [`Total audit events: ${res.total_events}`, `Verdict: ${res.verdict}`],
             inferences: [res.ai_advisory],
@@ -306,6 +316,20 @@ if (importBtn) {
             { seq: 1, time: new Date().toISOString(), cat: 'AuditReport', details: res.summary_text, hash: 'verified...ok' }
           ]
         };
+
+        const allAccountIds = Object.values(participantsData)
+          .map(p => p.authenticatedAccountId)
+          .filter(Boolean);
+
+        const dupRes = await window.__TAURI__.core.invoke('check_duplicate_accounts', {
+          accountIds: allAccountIds
+        });
+
+        if (dupRes.has_duplicates) {
+          duplicateAlertBadge.style.display = 'inline-flex';
+          alert('WARNING: ' + dupRes.findings.join('\n'));
+        }
+
         renderParticipants();
         loadParticipant(newKey);
         alert(`Evidence verified: Verdict is ${res.verdict}`);
@@ -318,7 +342,6 @@ if (importBtn) {
   });
 }
 
-// Export Compiler Report
 const exportCompilerBtn = document.getElementById('exportCompilerReportBtn');
 if (exportCompilerBtn) {
   exportCompilerBtn.addEventListener('click', () => {
@@ -354,6 +377,8 @@ if (exportCompilerBtn) {
   });
 }
 
-// Init
 renderParticipants();
 loadParticipant(currentParticipantKey);
+if (window.replaceLucideIcons) {
+  window.replaceLucideIcons();
+}

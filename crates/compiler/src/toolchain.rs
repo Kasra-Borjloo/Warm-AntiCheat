@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use warm_crypto::sha256_digest;
 
-/// Metadata and integrity specification for the bundled, self-contained GNU GCC/G++ C++23 toolchain.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ToolchainSpec {
     pub name: String,
@@ -23,11 +22,6 @@ pub struct ToolchainSpec {
 pub struct BundledToolchain;
 
 impl BundledToolchain {
-    /// Discovers and validates the self-contained bundled GNU G++ compiler toolchain.
-    ///
-    /// IMPORTANT: This function NEVER searches system PATH, NEVER checks for MSYS2,
-    /// Clang, or Visual Studio, and strictly verifies the toolchain bundled with
-    /// the application distribution.
     pub fn locate(custom_root: Option<&Path>) -> Result<ToolchainSpec> {
         let toolchain_dir = if let Some(root) = custom_root {
             root.to_path_buf()
@@ -55,7 +49,6 @@ impl BundledToolchain {
             )));
         }
 
-        // Verify compiler binary integrity hash
         let bytes = fs::read(&gxx_binary).map_err(|e| {
             CompilerError::Toolchain(format!(
                 "Failed to read bundled compiler binary for integrity hashing: {e}"
@@ -63,10 +56,8 @@ impl BundledToolchain {
         })?;
         let sha256_hash = sha256_digest(&bytes);
 
-        // Query version using isolated local execution environment
         let (version, target_triple) = Self::query_isolated_version(&gxx_binary, &toolchain_dir)?;
 
-        // Verify C++23 standard and bits/stdc++.h support inside isolated environment
         let bits_supported = Self::verify_cxx23_isolated(&gxx_binary, &toolchain_dir)?;
         if !bits_supported {
             return Err(CompilerError::Toolchain(format!(
@@ -88,11 +79,13 @@ impl BundledToolchain {
         })
     }
 
-    /// Locates the bundled toolchain within the application's private resource directories.
     fn find_application_bundled_toolchain() -> Result<PathBuf> {
         let mut candidates = Vec::new();
 
-        // 1. Next to currently running executable: <exe_dir>/toolchain
+        if let Ok(custom) = env::var("WARM_BUNDLED_TOOLCHAIN") {
+            candidates.push(PathBuf::from(custom));
+        }
+
         if let Ok(exe_path) = env::current_exe() {
             if let Some(parent) = exe_path.parent() {
                 candidates.push(parent.join("toolchain"));
@@ -101,12 +94,10 @@ impl BundledToolchain {
             }
         }
 
-        // 2. Client relative directory in contest distribution
         candidates.push(PathBuf::from("./toolchain"));
         candidates.push(PathBuf::from("../toolchain"));
         candidates.push(PathBuf::from("./client/toolchain"));
 
-        // 3. Application-controlled local cache (Windows/Linux/macOS)
         #[cfg(target_os = "windows")]
         if let Ok(local_app_data) = env::var("LOCALAPPDATA") {
             candidates.push(PathBuf::from(local_app_data).join("WarmAntiCheat/toolchain"));
@@ -116,10 +107,17 @@ impl BundledToolchain {
             candidates.push(PathBuf::from(home).join(".local/share/WarmAntiCheat/toolchain"));
         }
 
-        // 4. Bundled staging directory for local contest runs
         #[cfg(target_os = "windows")]
         {
             candidates.push(PathBuf::from("C:\\mingw"));
+            candidates.push(PathBuf::from("C:\\msys64\\ucrt64"));
+            candidates.push(PathBuf::from("C:\\msys64\\mingw64"));
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            candidates.push(PathBuf::from("/usr"));
+            candidates.push(PathBuf::from("/usr/local"));
         }
 
         for c in &candidates {
@@ -140,14 +138,12 @@ impl BundledToolchain {
         )))
     }
 
-    /// Runs version query in an isolated environment without system PATH pollution.
     fn query_isolated_version(gxx_binary: &Path, toolchain_dir: &Path) -> Result<(String, String)> {
         let bin_dir = toolchain_dir.join("bin");
 
         let mut cmd = Command::new(gxx_binary);
         cmd.arg("-v");
 
-        // Isolate environment PATH to only bundled bin directory and critical OS system libraries
         #[cfg(target_os = "windows")]
         {
             let isolated_path = format!("{};C:\\Windows\\System32", bin_dir.display());
@@ -196,7 +192,6 @@ impl BundledToolchain {
         Ok((version, target))
     }
 
-    /// Verifies C++23 and bits/stdc++.h compilation in a hermetic test sandbox.
     fn verify_cxx23_isolated(gxx_binary: &Path, toolchain_dir: &Path) -> Result<bool> {
         let bin_dir = toolchain_dir.join("bin");
         let temp_dir = tempfile::Builder::new()
