@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title id="windowTitle">GOCUP 1 | Participant Client</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="client-container">
+    <!-- Top Header -->
+    <header class="client-header">
+      <div class="header-branding">
+        <span class="shield-icon">🛡️</span>
+        <div>
+          <h1 id="contestHeaderTitle">GOCUP 1</h1>
+          <span class="organizer-badge" id="organizerName">Sharif University Computer Society</span>
+        </div>
+      </div>
+      <div class="header-status">
+        <span class="status-indicator status-idle" id="sessionStatusIndicator"></span>
+        <span class="status-text" id="sessionStatusText">Awaiting Enrollment</span>
+      </div>
+    </header>
+
+    <!-- Main Navigation Tabs -->
+    <nav class="client-tabs">
+      <button class="tab-btn active" data-tab="sessionTab">Competition Session</button>
+      <button class="tab-btn" data-tab="rulesTab">Competition Rules</button>
+      <button class="tab-btn" data-tab="privacyTab">Privacy & Disclosure</button>
+      <button class="tab-btn" data-tab="exportTab">Export Evidence</button>
+    </nav>
+
+    <!-- Tab 1: Competition Session -->
+    <main class="tab-content active" id="sessionTab">
+      <!-- Enrollment View (Shown before start) -->
+      <div class="card" id="enrollmentCard">
+        <h2>Participant Enrollment</h2>
+        <p class="description">Enter your assigned credentials to begin monitoring and join the contest session.</p>
+
+        <div class="form-group">
+          <label for="participantId">Participant / Team ID *</label>
+          <input type="text" id="participantId" value="team-42" placeholder="e.g. team-42">
+        </div>
+
+        <div class="form-group mt-2">
+          <label for="enrollmentToken">Organizer Enrollment Token *</label>
+          <input type="text" id="enrollmentToken" value="WARM-GOCUP-1-TEAM42-VALIDTOKEN" placeholder="Paste your proctor-issued token">
+        </div>
+
+        <div class="action-row mt-4">
+          <button class="btn btn-primary btn-lg" id="startSessionBtn">▶ Start Competition Session</button>
+        </div>
+      </div>
+
+      <!-- Active Monitoring View (Shown during contest) -->
+      <div class="card" id="activeSessionCard" style="display: none;">
+        <div class="session-stats-grid">
+          <div class="stat-box">
+            <span class="stat-label">Participant ID</span>
+            <span class="stat-value" id="activeParticipantId">team-42</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Session Elapsed</span>
+            <span class="stat-value font-mono" id="elapsedTimer">00:00:00</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Events Recorded</span>
+            <span class="stat-value font-mono" id="eventsCount">0</span>
+          </div>
+          <div class="stat-box">
+            <span class="stat-label">Hash Chain</span>
+            <span class="stat-value text-success">Verified Link</span>
+          </div>
+        </div>
+
+        <div class="monitor-indicators-grid mt-4">
+          <div class="indicator-item">
+            <span class="dot dot-active"></span>
+            <span>Process Monitor Active</span>
+          </div>
+          <div class="indicator-item">
+            <span class="dot dot-active"></span>
+            <span>Restricted Domain Filter Active</span>
+          </div>
+          <div class="indicator-item">
+            <span class="dot dot-active"></span>
+            <span>Network Transition Logger Active</span>
+          </div>
+          <div class="indicator-item">
+            <span class="dot dot-active"></span>
+            <span>Tamper-Evident SHA-256 Storage</span>
+          </div>
+        </div>
+
+        <div class="action-row mt-4">
+          <button class="btn btn-danger" id="concludeSessionBtn">⏹ Conclude Session</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Tab 2: Rules -->
+    <div class="tab-content" id="rulesTab">
+      <div class="card">
+        <h2>Official Competition Rules</h2>
+        <ul class="rules-list mt-2">
+          <li><strong>Prohibited AI Models:</strong> Local inference runtimes (e.g. Ollama, LM Studio, llama.cpp, Jan) are strictly prohibited during the contest window.</li>
+          <li><strong>Restricted Domains:</strong> Online chat interfaces and LLMs (ChatGPT, Claude, Gemini, Copilot, Perplexity) may not be accessed.</li>
+          <li><strong>Continuity:</strong> Do not terminate the participant client during the contest. If your device restarts or sleeps, relaunch the client immediately.</li>
+          <li><strong>Submission:</strong> At the conclusion of the contest, export your sealed evidence archive and hand it to a proctor.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Tab 3: Privacy & Disclosure -->
+    <div class="tab-content" id="privacyTab">
+      <div class="card">
+        <h2>Privacy & Data Disclosure Notice</h2>
+        <p class="description">Warm-AntiCheat operates with complete transparency regarding monitored metrics.</p>
+
+        <div class="privacy-grid mt-2">
+          <div class="privacy-col">
+            <h4 class="text-success">✔ What IS Recorded</h4>
+            <ul>
+              <li>Process startup and shutdown events (PID, name)</li>
+              <li>Prohibited AI runtime detection</li>
+              <li>Restricted domain navigation events</li>
+              <li>Network adapter transitions (Wi-Fi / Ethernet state)</li>
+              <li>System sleep, wake, and heartbeat markers</li>
+            </ul>
+          </div>
+          <div class="privacy-col">
+            <h4 class="text-danger">✖ What is NEVER Recorded</h4>
+            <ul>
+              <li>No keystrokes or arbitrary keyboard recording</li>
+              <li>No webcam, microphone, or audio access</li>
+              <li>No desktop screen recording or streaming</li>
+              <li>No access to personal documents or unrelated files</li>
+              <li>No personal browsing history outside restricted domains</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="callout mt-4">
+          <strong>Asymmetric Privacy Guarantee:</strong> All event payloads are encrypted with AES-256-GCM using the competition judge's public key. Data cannot be read by anyone on your machine.
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 4: Export Evidence -->
+    <div class="tab-content" id="exportTab">
+      <div class="card">
+        <h2>Export Sealed Evidence Archive</h2>
+        <p class="description">Export your competition audit log to a USB drive or local directory for judge evaluation.</p>
+
+        <div class="form-group mt-2">
+          <label for="exportPathInput">Export Destination Directory</label>
+          <input type="text" id="exportPathInput" value="./export">
+        </div>
+
+        <div class="action-row mt-4">
+          <button class="btn btn-success btn-lg" id="exportBtn">💾 Export Evidence Package</button>
+        </div>
+
+        <div class="callout mt-4" id="exportResult" style="display: none;">
+          <strong>Export Status:</strong> <span id="exportResultText"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
