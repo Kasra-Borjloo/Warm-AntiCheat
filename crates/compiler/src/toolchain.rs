@@ -115,10 +115,9 @@ impl BundledToolchain {
 
         #[cfg(not(target_os = "windows"))]
         if let Ok(home) = env::var("HOME") {
-            candidates.push(PathBuf::from(home).join(".local/share/WarmAntiCheat/toolchain"));
-            candidates.push(
-                PathBuf::from(home).join("Library/Application Support/WarmAntiCheat/toolchain"),
-            );
+            let home_path = PathBuf::from(&home);
+            candidates.push(home_path.join(".local/share/WarmAntiCheat/toolchain"));
+            candidates.push(home_path.join("Library/Application Support/WarmAntiCheat/toolchain"));
         }
 
         for c in &candidates {
