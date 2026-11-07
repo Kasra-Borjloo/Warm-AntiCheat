@@ -2,3 +2,6 @@
 
 pub mod generator;
 pub mod manifest;
+
+pub use generator::*;
+pub use manifest::*;
