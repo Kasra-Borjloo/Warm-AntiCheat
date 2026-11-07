@@ -26,7 +26,22 @@ const participantsData = {
       { seq: 2, time: '2026-11-07T09:00:05Z', cat: 'Network', details: 'Connected to WiFi: "Sharif-Guest" (Interface: wlan0)', hash: 'a149...8c2' },
       { seq: 3, time: '2026-11-07T09:00:15Z', cat: 'SystemLifecycle', details: 'Heartbeat tick #1 (All monitors operational)', hash: '9b04...5f7' },
       { seq: 4, time: '2026-11-07T09:00:20Z', cat: 'Process', details: 'Process started: code.exe (PID: 4120)', hash: '4cb1...210' },
-      { seq: 5, time: '2026-11-07T09:00:30Z', cat: 'Process', details: 'Process started: rustc.exe (PID: 5192)', hash: 'f782...aa4' }
+      { seq: 5, time: '2026-11-07T09:00:30Z', cat: 'Process', details: 'Process started: rustc.exe (PID: 5192)', hash: 'f782...aa4' },
+      { seq: 6, time: '2026-11-07T09:15:20Z', cat: 'Compiler', details: 'Built-in C++23 Compilation: solution.cpp (Success, Exit: 0)', hash: 'c901...4d8' }
+    ],
+    compilerActivity: [
+      {
+        timestamp: '2026-11-07T09:15:20Z',
+        sourceFile: 'solution.cpp',
+        sourceSha256: '8e82110c4d2d48348bb95b05615d6c8b9db77b3b429d20c5c366ff1239847e12',
+        compilerVersion: 'GNU G++ 16.2.0 (C++23)',
+        compilationArgs: ['-std=c++23', '-O2', '-pipe', 'solution.cpp', '-o', 'bin.exe'],
+        diagnostics: 'Compilation successful. 0 warnings.',
+        executableHash: 'a41d998124e5a201c8012bbfa32c0281b9201948291048291048291048291048',
+        exitCode: 0,
+        stdout: 'Warm-AntiCheat C++23 Solution Ready!\n',
+        sourceSnapshot: '#include <bits/stdc++.h>\n\nint main() {\n    std::cout << "Warm-AntiCheat C++23 Solution Ready!" << std::endl;\n    return 0;\n}'
+      }
     ]
   },
   'team-13': {
@@ -199,6 +214,31 @@ function loadParticipant(key) {
     </div>
   `;
 
+  // Compiler Activity Box
+  const compBox = document.getElementById('compilerActivityContent');
+  if (compBox) {
+    if (p.compilerActivity && p.compilerActivity.length > 0) {
+      compBox.innerHTML = p.compilerActivity.map(c => `
+        <div style="border-bottom: 1px solid #1e293b; padding-bottom: 0.75rem; margin-bottom: 0.75rem;">
+          <div style="display: flex; justify-content: space-between; color: #38bdf8; margin-bottom: 0.25rem;">
+            <span><strong>Source:</strong> ${c.sourceFile} (SHA-256: ${c.sourceSha256.substring(0, 16)}...)</span>
+            <span>${c.timestamp}</span>
+          </div>
+          <div><strong>Compiler:</strong> ${c.compilerVersion} | <strong>Args:</strong> ${c.compilationArgs.join(' ')}</div>
+          <div><strong>Diagnostics:</strong> ${c.diagnostics}</div>
+          ${c.executableHash ? `<div><strong>Binary Hash:</strong> ${c.executableHash.substring(0, 16)}... | <strong>Exit Code:</strong> ${c.exitCode}</div>` : ''}
+          ${c.stdout ? `<div style="margin-top: 0.25rem; color: #4ade80;"><strong>Stdout:</strong> ${c.stdout}</div>` : ''}
+          <details style="margin-top: 0.5rem; cursor: pointer;">
+            <summary style="color: #94a3b8;">View Submitted Source Snapshot</summary>
+            <pre style="background: #0f172a; padding: 0.5rem; border-radius: 4px; margin-top: 0.25rem; color: #f8fafc; font-size: 0.85rem;">${c.sourceSnapshot}</pre>
+          </details>
+        </div>
+      `).join('');
+    } else {
+      compBox.innerHTML = `<span style="color: #64748b;">No built-in compiler attempts recorded for this participant. (Note: Absence does not indicate external compiler use).</span>`;
+    }
+  }
+
   renderTimeline(p.timeline);
 }
 
@@ -237,6 +277,82 @@ themeToggle.addEventListener('click', () => {
   const next = current === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
 });
+
+// Import Button
+const importBtn = document.getElementById('importBtn');
+if (importBtn) {
+  importBtn.addEventListener('click', async () => {
+    const dbPath = prompt('Enter path to participant evidence SQLite file:', './participant_audit.sqlite');
+    if (!dbPath) return;
+
+    if (window.__TAURI__ && window.__TAURI__.core) {
+      try {
+        const res = await window.__TAURI__.core.invoke('verify_evidence_db', { dbPath: dbPath, keyPath: null });
+        const newKey = `import-${Date.now()}`;
+        participantsData[newKey] = {
+          name: `Imported (${res.participant_id})`,
+          verdict: res.verdict,
+          hashChain: 'VERIFIED (SHA-256)',
+          totalEvents: res.total_events,
+          criticalFindings: res.violations.length,
+          gaps: 0,
+          findings: res.violations.map(v => ({ severity: 'critical', title: 'Security Finding', desc: v, seqs: [1], time: new Date().toISOString() })),
+          aiSummary: {
+            facts: [`Total audit events: ${res.total_events}`, `Verdict: ${res.verdict}`],
+            inferences: [res.ai_advisory],
+            recommendations: ['Review timeline logs below.']
+          },
+          timeline: [
+            { seq: 1, time: new Date().toISOString(), cat: 'AuditReport', details: res.summary_text, hash: 'verified...ok' }
+          ]
+        };
+        renderParticipants();
+        loadParticipant(newKey);
+        alert(`Evidence verified: Verdict is ${res.verdict}`);
+      } catch (err) {
+        alert(`Verification failed: ${err}`);
+      }
+    } else {
+      alert(`[Browser Preview] Evidence imported from ${dbPath} (Simulated).`);
+    }
+  });
+}
+
+// Export Compiler Report
+const exportCompilerBtn = document.getElementById('exportCompilerReportBtn');
+if (exportCompilerBtn) {
+  exportCompilerBtn.addEventListener('click', () => {
+    const p = participantsData[currentParticipantKey];
+    if (!p) return;
+    let md = `# Compiler Activity Forensic Report: ${p.name}\n\n`;
+    md += `Contest: GOCUP 1 | Generated: ${new Date().toISOString()}\n\n`;
+    if (p.compilerActivity && p.compilerActivity.length > 0) {
+      p.compilerActivity.forEach((c, idx) => {
+        md += `## Attempt #${idx + 1} (${c.timestamp})\n`;
+        md += `- Source File: \`${c.sourceFile}\`\n`;
+        md += `- Source SHA-256: \`${c.sourceSha256}\`\n`;
+        md += `- Compiler Version: ${c.compilerVersion}\n`;
+        md += `- Command: \`g++ ${c.compilationArgs.join(' ')}\`\n`;
+        md += `- Diagnostics: ${c.diagnostics}\n`;
+        if (c.executableHash) {
+          md += `- Executable Hash: \`${c.executableHash}\`\n`;
+          md += `- Exit Code: ${c.exitCode}\n`;
+          md += `- Stdout: \`${c.stdout}\`\n`;
+        }
+        md += `\n### Source Snapshot:\n\`\`\`cpp\n${c.sourceSnapshot}\n\`\`\`\n\n`;
+      });
+    } else {
+      md += `*No built-in compiler events recorded for this participant.*\n`;
+    }
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `compiler-activity-${currentParticipantKey}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
 
 // Init
 renderParticipants();

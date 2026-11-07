@@ -7,6 +7,12 @@ param (
 
 $ErrorActionPreference = "Stop"
 
+# Ensure space-free target directory on Windows if path contains spaces
+if ($PWD.Path -match '\s' -and -not $env:CARGO_TARGET_DIR) {
+    $env:CARGO_TARGET_DIR = "C:\warm_target"
+    Write-Host "[*] Path contains spaces. Setting CARGO_TARGET_DIR=$env:CARGO_TARGET_DIR" -ForegroundColor DarkGray
+}
+
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "   Warm-AntiCheat Build Script (Windows)" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan

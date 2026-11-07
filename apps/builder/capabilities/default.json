@@ -1,0 +1,8 @@
+{
+  "identifier": "default",
+  "description": "Default permissions for Contest Builder window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}

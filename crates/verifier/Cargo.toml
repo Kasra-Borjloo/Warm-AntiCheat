@@ -19,6 +19,7 @@ chrono.workspace = true
 
 [dev-dependencies]
 warm_builder_core.workspace = true
+warm_compiler.workspace = true
 warm_audit.workspace = true
 hex.workspace = true
 x25519-dalek.workspace = true

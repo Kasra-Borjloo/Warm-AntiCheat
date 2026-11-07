@@ -26,6 +26,7 @@
     <!-- Main Navigation Tabs -->
     <nav class="client-tabs">
       <button class="tab-btn active" data-tab="sessionTab">Competition Session</button>
+      <button class="tab-btn" data-tab="compilerTab" id="compilerNavBtn">Built-in C++ Compiler</button>
       <button class="tab-btn" data-tab="rulesTab">Competition Rules</button>
       <button class="tab-btn" data-tab="privacyTab">Privacy & Disclosure</button>
       <button class="tab-btn" data-tab="exportTab">Export Evidence</button>
@@ -143,6 +144,55 @@
 
         <div class="callout mt-4">
           <strong>Asymmetric Privacy Guarantee:</strong> All event payloads are encrypted with AES-256-GCM using the competition judge's public key. Data cannot be read by anyone on your machine.
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Built-in C++ Compiler -->
+    <div class="tab-content" id="compilerTab">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h2>Built-in C++23 Compiler & Runner</h2>
+          <span class="badge text-success" id="toolchainBadge" style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.85rem;">
+            ✔ Bundled GNU G++ (C++23) &lt;bits/stdc++.h&gt;
+          </span>
+        </div>
+        <p class="description">Self-contained offline GNU G++ toolchain bundled with the client. Zero system dependencies or external compilers required.</p>
+
+        <div class="callout" style="background: rgba(14, 165, 233, 0.05); border-left: 4px solid #0ea5e9; padding: 0.75rem 1rem; margin-bottom: 1rem;">
+          <strong>Audit Notice:</strong> Source snapshots, compilation diagnostics, and executable execution events are cryptographically recorded into the contest hash-chain log for judge verification.
+        </div>
+
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+            <label for="cppSourceEditor">C++ Source Code (solution.cpp)</label>
+            <input type="file" id="cppFileInput" accept=".cpp,.cc,.cxx,.h,.hpp" style="font-size: 0.85rem;">
+          </div>
+          <textarea id="cppSourceEditor" rows="12" style="font-family: monospace; font-size: 0.95rem; width: 100%; border-radius: 6px; padding: 0.75rem; background: #0f172a; color: #f8fafc; border: 1px solid #334155; resize: vertical;">#include &lt;bits/stdc++.h&gt;
+
+int main() {
+    std::ios_base::sync_with_stdio(false);
+    std::cin.tie(NULL);
+
+    std::cout &lt;&lt; "Warm-AntiCheat C++23 Solution Ready!" &lt;&lt; std::endl;
+    return 0;
+}
+</textarea>
+        </div>
+
+        <div class="action-row mt-2" style="display: flex; gap: 0.75rem;">
+          <button class="btn btn-primary btn-lg" id="compileRunBtn">⚡ Compile &amp; Run (g++ -std=c++23 -O2)</button>
+          <button class="btn btn-secondary btn-lg" id="stopExecutionBtn" style="color: #ef4444;">⏹ Stop Execution</button>
+        </div>
+
+        <div class="form-group mt-4">
+          <label for="terminalStdin">Standard Input (stdin)</label>
+          <textarea id="terminalStdin" rows="3" placeholder="Paste test case input here..." style="font-family: monospace; font-size: 0.9rem; width: 100%; border-radius: 6px; padding: 0.5rem; background: #0f172a; color: #f8fafc; border: 1px solid #334155;"></textarea>
+        </div>
+
+        <div class="form-group mt-2">
+          <label>Program Output &amp; Terminal (stdout / stderr / diagnostics)</label>
+          <pre id="terminalOutput" style="background: #020617; color: #38bdf8; padding: 1rem; border-radius: 6px; min-height: 120px; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.9rem; border: 1px solid #1e293b; white-space: pre-wrap;">[Terminal ready. Click 'Compile &amp; Run' to execute using the bundled offline GNU G++ C++23 compiler.]</pre>
         </div>
       </div>
     </div>

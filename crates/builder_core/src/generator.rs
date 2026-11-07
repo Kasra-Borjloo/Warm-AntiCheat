@@ -23,6 +23,8 @@ pub struct ContestBuildConfig {
     pub supported_platforms: Vec<String>,
     pub branding_theme: String,
     pub output_base_dir: PathBuf,
+    #[serde(default)]
+    pub enable_cpp_compiler: bool,
 }
 
 /// Result returned after successful contest distribution package generation.
@@ -98,7 +100,27 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
         heartbeat_interval_secs: 15,
         max_interruption_gap_secs: 60,
         retention_days: contest.retention_days,
+        enable_cpp_compiler: config.enable_cpp_compiler,
     };
+
+    // If C++ compiler is enabled, initialize toolchain directory structure
+    if config.enable_cpp_compiler {
+        let toolchain_dir = client_dir.join("toolchain");
+        let _ = fs::create_dir_all(&toolchain_dir);
+        let spec_file = toolchain_dir.join("toolchain_manifest.json");
+        let spec_json = serde_json::json!({
+            "name": "GNU GCC / G++ C++23 Toolchain",
+            "version": "14.2.0",
+            "cxx_standard": "c++23",
+            "bits_stdcxx_supported": true,
+            "offline_ready": true,
+            "platforms": config.supported_platforms
+        });
+        let _ = fs::write(
+            &spec_file,
+            serde_json::to_string_pretty(&spec_json).unwrap(),
+        );
+    }
 
     // 3. Create manifest and sign with organizer private key
     let mut binary_checksums = BTreeMap::new();
@@ -246,6 +268,7 @@ mod tests {
             supported_platforms: vec!["windows".to_string(), "linux".to_string()],
             branding_theme: "dark".to_string(),
             output_base_dir: temp_dir.clone(),
+            enable_cpp_compiler: false,
         };
 
         let bundle = generate_contest_distribution(&config).expect("Generation should succeed");

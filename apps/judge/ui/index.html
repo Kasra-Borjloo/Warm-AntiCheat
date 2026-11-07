@@ -95,6 +95,7 @@
             <h3>Audit Event Timeline</h3>
             <div class="filter-buttons">
               <button class="filter-btn active" data-cat="all">All</button>
+              <button class="filter-btn" data-cat="Compiler">Compiler</button>
               <button class="filter-btn" data-cat="Process">Process</button>
               <button class="filter-btn" data-cat="Browser">Browser</button>
               <button class="filter-btn" data-cat="Network">Network</button>
@@ -117,6 +118,18 @@
                 <!-- Timeline rows -->
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- Compiler Activity Forensics Card -->
+        <div class="card mt-4" id="compilerCard">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <h3>Built-in C++ Compiler Forensic Inspection</h3>
+            <button class="btn btn-secondary btn-sm" id="exportCompilerReportBtn">📥 Export Compiler Activity Report</button>
+          </div>
+          <p class="description">Review exact source snapshots, compiler diagnostics, and execution events cryptographically recorded in the hash chain.</p>
+          <div id="compilerActivityContent" style="background: #020617; padding: 1rem; border-radius: 6px; border: 1px solid #1e293b; font-family: monospace; font-size: 0.9rem; max-height: 250px; overflow-y: auto; color: #cbd5e1;">
+            No built-in compiler attempts recorded for this participant. (Absence does not imply external compiler use).
           </div>
         </div>
 

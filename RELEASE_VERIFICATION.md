@@ -40,3 +40,42 @@ Output:
 [OK] Manifest matches Contest UUID: 4f447f5e-149b-43d9-95cb-6be7a01c8091
 [OK] Organizer: ICPC Regional Committee
 ```
+
+---
+
+## 3. Authenticode Digital Signature Verification (Windows)
+
+Production Windows executables and MSI installers are signed with an Authenticode certificate. To verify the signature and timestamp:
+
+```powershell
+Get-AuthenticodeSignature .\warm_participant_app.exe | Format-List
+```
+
+Expected Output:
+```text
+SignerCertificate : [Subject: CN=Kasra Borjloo, ...]
+Status            : Valid
+StatusMessage     : Signature verified.
+TimeStamper       : [RFC 3161 Timestamp Authority]
+```
+
+---
+
+## 4. Antivirus & False-Positive Verification
+
+Official release artifacts are screened against major antivirus engines before release.
+- If an antivirus scanner flags an artifact (e.g., Bkav Pro `W32.Malware.9E43BB5C` or generic heuristic):
+  1. Confirm the binary SHA-256 matches `SHA256SUMS.txt`.
+  2. Inspect the reproducible build provenance from the GitHub Actions run.
+  3. Consult [ANTIVIRUS_COMPATIBILITY.md](ANTIVIRUS_COMPATIBILITY.md) for vendor false-positive submission procedures.
+
+---
+
+## 5. Software Bill of Materials (SBOM) Verification
+
+Every release includes an SPDX/CycloneDX SBOM (`sbom.spdx.json` / `sbom.cyclonedx.json`).
+Verify dependency integrity:
+```bash
+cargo audit
+```
+

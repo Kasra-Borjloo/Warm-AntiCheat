@@ -41,6 +41,7 @@ fn test_end_to_end_full_contest_lifecycle() {
         ],
         branding_theme: "dark".to_string(),
         output_base_dir: temp_root.join("dist"),
+        enable_cpp_compiler: false,
     };
 
     let bundle = generate_contest_distribution(&build_config)
@@ -229,6 +230,156 @@ fn test_end_to_end_full_contest_lifecycle() {
     assert!(cheater_report.findings[0]
         .description
         .contains("ollama.exe"));
+
+    // Cleanup
+    let _ = fs::remove_dir_all(temp_root);
+}
+
+#[test]
+fn test_end_to_end_compiler_audit_and_judge_verification() {
+    let temp_root = std::env::temp_dir().join(format!("warm_int_comp_{}", Uuid::new_v4()));
+    let dist_root = temp_root.join("dist");
+    let _ = fs::create_dir_all(&dist_root);
+
+    // 1. Organizer configures contest with C++ Compiler Enabled
+    let start_time = Utc::now();
+    let end_time = start_time + chrono::Duration::hours(4);
+    let build_config = ContestBuildConfig {
+        title: "GOCUP C++ Championship".to_string(),
+        organizer: "Sharif Algorithm Guild".to_string(),
+        description: "Official Competitive Programming Contest with Built-in Compiler".to_string(),
+        start_time,
+        end_time,
+        prohibited_apps: vec!["ollama.exe".to_string()],
+        restricted_domains: vec!["chatgpt.com".to_string()],
+        supported_platforms: vec![
+            "windows".to_string(),
+            "linux".to_string(),
+            "macos".to_string(),
+        ],
+        branding_theme: "dark".to_string(),
+        output_base_dir: dist_root.clone(),
+        enable_cpp_compiler: true,
+    };
+
+    let bundle = generate_contest_distribution(&build_config).expect("Generate contest bundle");
+    assert!(bundle.signed_manifest.manifest.policy.enable_cpp_compiler);
+    assert!(bundle
+        .root_dir
+        .join("client/toolchain/toolchain_manifest.json")
+        .exists());
+
+    // 2. Participant uses bundled C++23 compiler
+    let participant_id = "contestant-99";
+    let contest_uuid = bundle.signed_manifest.manifest.contest.uuid;
+    let participant_db = temp_root.join("participant.sqlite");
+
+    let store = SqliteAuditStore::open(&participant_db).expect("Open store");
+    let mut tracker = HashChainTracker::new(contest_uuid, participant_id);
+    let mut session = CompetitionSession::new("gocup-cpp", participant_id).unwrap();
+    session.start().unwrap();
+
+    let judge_pk_hex =
+        fs::read_to_string(bundle.root_dir.join("configuration/judge_evidence_key.pub")).unwrap();
+    let judge_pk_bytes = hex::decode(judge_pk_hex.trim()).unwrap();
+    let mut judge_pk_arr = [0u8; 32];
+    judge_pk_arr.copy_from_slice(&judge_pk_bytes);
+    let judge_public_key = x25519_dalek::PublicKey::from(judge_pk_arr);
+
+    // Compile C++23 solution
+    let tc = warm_compiler::BundledToolchain::locate(None).expect("Bundled toolchain");
+    let engine = warm_compiler::CompilerEngine::new(tc);
+
+    let cpp_code = r#"
+#include <bits/stdc++.h>
+int main() {
+    int x;
+    if (std::cin >> x) {
+        std::cout << "SQUARE=" << (x * x) << std::endl;
+    }
+    return 0;
+}
+"#;
+
+    let comp_req = warm_compiler::CompilationRequest {
+        source_path: std::path::PathBuf::from("solution.cpp"),
+        source_code: Some(cpp_code.to_string()),
+        output_dir: None,
+        optimization_level: Some("-O2".to_string()),
+        standard: Some("-std=c++23".to_string()),
+        extra_args: vec!["-pipe".to_string()],
+    };
+
+    let comp_res = engine.compile(comp_req).expect("Compile solution.cpp");
+    assert!(comp_res.success);
+
+    let exec_res = warm_compiler::ExecutionRunner::execute(warm_compiler::ExecutionRequest {
+        binary_path: comp_res.output_binary_path.clone().unwrap(),
+        toolchain_bin_dir: Some(engine.toolchain().root_dir.join("bin")),
+        stdin_input: Some("9\n".to_string()),
+        timeout_ms: 5000,
+        args: vec![],
+    })
+    .expect("Execute solution.cpp");
+
+    assert_eq!(exec_res.stdout.trim(), "SQUARE=81");
+
+    // Cryptographically record Compiler audit event
+    let payload = warm_compiler::build_compiler_audit_payload(&comp_res, Some(&exec_res));
+    let payload_bytes = serde_json::to_vec(&payload).unwrap();
+    let payload_hash = sha256_digest(&payload_bytes);
+    let now = Utc::now();
+    let (seq, prev_h, curr_h) =
+        tracker.step(&now.to_rfc3339(), EventCategory::Compiler, &payload_hash);
+    let aad = format!("{}:{}:{}", contest_uuid, participant_id, seq).into_bytes();
+    let sealed =
+        seal_asymmetric_payload(&judge_public_key, &contest_uuid, &payload_bytes, &aad).unwrap();
+
+    store
+        .record_event(
+            seq,
+            Uuid::new_v4(),
+            contest_uuid,
+            participant_id,
+            session.session_id,
+            now,
+            EventCategory::Compiler,
+            &sealed,
+            &payload_hash,
+            &prev_h,
+            &curr_h,
+        )
+        .unwrap();
+
+    session.conclude().unwrap();
+    store.checkpoint().unwrap();
+
+    // 3. Judge Verifier Forensics
+    let judge_priv_hex = fs::read_to_string(&bundle.judge_private_key_path).unwrap();
+    let judge_priv_bytes = hex::decode(judge_priv_hex.trim()).unwrap();
+    let mut judge_priv_arr = [0u8; 32];
+    judge_priv_arr.copy_from_slice(&judge_priv_bytes);
+    let judge_keypair = EvidenceEncryptionKeypair::from_bytes(judge_priv_arr);
+
+    let verifier = ForensicVerifier::new(bundle.signed_manifest.manifest.policy, judge_keypair);
+    let report = verifier
+        .audit_store(&store, &contest_uuid, participant_id)
+        .expect("Forensic audit");
+
+    assert_eq!(report.classification, VerdictClassification::Safe);
+    assert_eq!(report.total_events, 1);
+    assert!(report.hash_chain_verified);
+    assert_eq!(report.timeline[0].category, "Compiler");
+
+    let stats = warm_audit::DeterministicAuditEngine::compute_stats(&report);
+    assert_eq!(stats.event_distribution.get("Compiler"), Some(&1));
+
+    let ai_summary = warm_audit::LocalAiSummarizer::summarize(&report);
+    assert_eq!(ai_summary.verdict, "SAFE");
+    assert!(ai_summary
+        .verified_facts
+        .iter()
+        .any(|f| f.contains("Built-in C++ compiler activity recorded")));
 
     // Cleanup
     let _ = fs::remove_dir_all(temp_root);

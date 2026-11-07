@@ -10,6 +10,7 @@ members = [
     "crates/verifier",
     "crates/audit",
     "crates/builder_core",
+    "crates/compiler",
     "apps/builder",
     "apps/participant",
     "apps/judge",
@@ -44,6 +45,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 hkdf = "0.12"
 subtle = "2.6"
 base64 = "0.22"
+tempfile = "3.12"
+tauri = { version = "2", default-features = false, features = ["wry", "common-controls-v6"] }
+tauri-build = { version = "2", default-features = false }
 
 # Internal crates
 warm_core = { path = "crates/core" }
@@ -55,3 +59,4 @@ warm_platform = { path = "crates/platform" }
 warm_verifier = { path = "crates/verifier" }
 warm_audit = { path = "crates/audit" }
 warm_builder_core = { path = "crates/builder_core" }
+warm_compiler = { path = "crates/compiler" }

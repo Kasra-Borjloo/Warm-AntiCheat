@@ -1,0 +1,38 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Warm-AntiCheat Judge Verifier",
+  "version": "0.1.0",
+  "identifier": "com.warmanticheat.judge",
+  "build": {
+    "frontendDist": "ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Warm-AntiCheat Judge Verifier",
+        "width": 1280,
+        "height": 850,
+        "minWidth": 800,
+        "minHeight": 600,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "copyright": "Copyright © 2026 Kasra Borjloo. Licensed under GPL-3.0.",
+    "shortDescription": "Offline-First Anti-Cheat Judge Verifier",
+    "longDescription": "Desktop forensic verification and audit tool used by jury members to import, decrypt, verify cryptographic hash chains, and inspect competition activity."
+  }
+}

@@ -177,16 +177,54 @@ themeToggle.addEventListener('click', () => {
 });
 
 // Build generation simulation / execution
-generateBtn.addEventListener('click', () => {
+generateBtn.addEventListener('click', async () => {
   logsContainer.style.display = 'block';
   logOutput.textContent = `[INFO] Initializing Contest Generation Pipeline...\n`;
-  logOutput.textContent += `[INFO] Generating contest UUID: ${crypto.randomUUID()}\n`;
-  logOutput.textContent += `[INFO] Generating Ed25519 Manifest Signing Keypair...\n`;
-  logOutput.textContent += `[INFO] Generating X25519 Judge Evidence Encryption Keypair...\n`;
-  logOutput.textContent += `[INFO] Signing contest manifest with Organizer Private Key...\n`;
-  logOutput.textContent += `[SUCCESS] dist/${contestIdInput.value}/ created with manifests, configuration, and checksums.\n`;
-  logOutput.textContent += `[INFO] Private decryption key safely quarantined in judge/keys/.\n`;
-  logOutput.textContent += `[READY] All packages and verification instructions successfully emitted!\n`;
+
+  const params = {
+    title: contestTitleInput.value || 'GOCUP 1',
+    organizer: document.getElementById('organizerName')?.value || 'Sharif University Computer Society',
+    description: document.getElementById('contestDesc')?.value || 'Official Algorithmic Contest',
+    start_time: document.getElementById('startTime')?.value ? new Date(document.getElementById('startTime').value).toISOString() : null,
+    end_time: document.getElementById('endTime')?.value ? new Date(document.getElementById('endTime').value).toISOString() : null,
+    prohibited_apps: state.prohibitedApps,
+    restricted_domains: state.restrictedDomains,
+    supported_platforms: ['windows', 'linux', 'macos'],
+    branding_theme: document.documentElement.getAttribute('data-theme') || 'dark',
+    output_dir: './dist',
+    enable_cpp_compiler: document.getElementById('enableCppCompiler')?.checked || false
+  };
+
+  if (window.__TAURI__ && window.__TAURI__.core) {
+    try {
+      logOutput.textContent += `[TAURI] Invoking native Rust build pipeline...\n`;
+      const res = await window.__TAURI__.core.invoke('generate_contest', { params });
+      if (res.success) {
+        logOutput.textContent += `[SUCCESS] Contest distribution bundle created!\n`;
+        logOutput.textContent += `    Contest ID:    ${res.contest_id}\n`;
+        logOutput.textContent += `    Root Package:  ${res.root_dir}\n`;
+        logOutput.textContent += `    Manifest:      ${res.manifest_path}\n`;
+        logOutput.textContent += `    Checksums:     ${res.checksums_path}\n`;
+        logOutput.textContent += `    Judge PrivKey: ${res.judge_private_key_path}\n`;
+        logOutput.textContent += `[INFO] Private decryption key quarantined in offline directory.\n`;
+        logOutput.textContent += `[READY] All packages and verification instructions successfully emitted!\n`;
+      } else {
+        logOutput.textContent += `[ERROR] Build pipeline failed: ${res.error}\n`;
+      }
+    } catch (err) {
+      logOutput.textContent += `[ERROR] Native IPC error: ${err}\n`;
+    }
+  } else {
+    // Browser preview mode
+    logOutput.textContent += `[INFO] Running in browser preview mode (Tauri IPC inactive)\n`;
+    logOutput.textContent += `[INFO] Generating contest UUID: ${crypto.randomUUID()}\n`;
+    logOutput.textContent += `[INFO] Generating Ed25519 Manifest Signing Keypair...\n`;
+    logOutput.textContent += `[INFO] Generating X25519 Judge Evidence Encryption Keypair...\n`;
+    logOutput.textContent += `[INFO] Signing contest manifest with Organizer Private Key...\n`;
+    logOutput.textContent += `[SUCCESS] dist/${contestIdInput.value}/ created with manifests, configuration, and checksums.\n`;
+    logOutput.textContent += `[INFO] Private decryption key safely quarantined in judge/keys/.\n`;
+    logOutput.textContent += `[READY] All packages and verification instructions successfully emitted!\n`;
+  }
 });
 
 // Init

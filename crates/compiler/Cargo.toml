@@ -1,0 +1,22 @@
+[package]
+name = "warm_compiler"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Built-in offline C++23 compiler engine, execution runner, and toolchain manager for Warm-AntiCheat"
+
+[dependencies]
+warm_core.workspace = true
+warm_events.workspace = true
+warm_crypto.workspace = true
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+tempfile = { workspace = true }
+tracing.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }

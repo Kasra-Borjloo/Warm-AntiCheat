@@ -12,6 +12,7 @@ pub enum EventCategory {
     SystemLifecycle,
     Security,
     ManualMarker,
+    Compiler,
 }
 
 impl std::fmt::Display for EventCategory {
@@ -23,6 +24,7 @@ impl std::fmt::Display for EventCategory {
             Self::SystemLifecycle => write!(f, "SystemLifecycle"),
             Self::Security => write!(f, "Security"),
             Self::ManualMarker => write!(f, "ManualMarker"),
+            Self::Compiler => write!(f, "Compiler"),
         }
     }
 }
@@ -90,6 +92,29 @@ pub enum LifecycleEventType {
     ShutdownSignal,
     MonitoringInterrupted,
     MonitoringRecovered,
+}
+
+/// Typed payload for built-in C++ compiler attempts and execution results.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CompilerEventPayload {
+    pub source_path: String,
+    pub source_sha256: String,
+    pub source_snapshot: String,
+    pub compiler_version: String,
+    pub toolchain_hash: String,
+    pub compilation_args: Vec<String>,
+    pub compilation_start: DateTime<Utc>,
+    pub compilation_end: DateTime<Utc>,
+    pub compiler_exit_code: Option<i32>,
+    pub compiler_diagnostics: String,
+    pub output_executable_hash: Option<String>,
+    pub execution_started: bool,
+    pub execution_start: Option<DateTime<Utc>>,
+    pub execution_end: Option<DateTime<Utc>>,
+    pub program_exit_code: Option<i32>,
+    pub resource_violations: Option<String>,
+    pub execution_error: Option<String>,
+    pub executable_args: Vec<String>,
 }
 
 /// Strongly typed audit event schema.

@@ -37,3 +37,14 @@ When submitting a vulnerability report, please include:
 2. Operating system and hardware environment.
 3. Proof-of-concept steps or code demonstrating the bypass or tampering.
 4. Assessment of whether the tamper attempt is detected as `REVIEW REQUIRED` or bypassed silently.
+
+---
+
+## 4. Antivirus Compatibility, Safe Desktop Practices & False-Positive Remediation
+
+Warm-AntiCheat is built to function cooperatively and transparently alongside endpoint protection systems:
+- **No Antivirus Tampering**: The software will never request that participants disable Windows Defender or third-party antivirus software, nor will it add registry exclusions or kill security services.
+- **Documented APIs**: All telemetry uses documented, sanctioned operating system interfaces (Win32 Toolhelp snapshot, IP Helper API, standard event notifications).
+- **False-Positive Investigation Protocol**: Antivirus detections (such as Bkav Pro `W32.Malware.9E43BB5C` or Defender SmartScreen unknown publisher warnings) are treated as actionable investigation signals. Official dispute submissions and whitelisting requests are filed directly with vendors rather than employing evasive binary packing or obfuscation.
+- For complete operational procedures, refer to [ANTIVIRUS_COMPATIBILITY.md](ANTIVIRUS_COMPATIBILITY.md).
+

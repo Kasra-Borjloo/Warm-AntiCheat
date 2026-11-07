@@ -49,3 +49,12 @@ All recorded logs are encrypted on the participant's device with the **Judge's p
 
 - Audit reports are retained solely for the official competition verification and appeal window (typically 7 to 30 days, as configured by the contest organizer).
 - After the verification period, audit evidence may be safely purged.
+
+---
+
+## 5. Security & Antivirus Non-Interference Guarantee
+
+- Warm-AntiCheat respects participant endpoint security. It **does not alter, disable, bypass, or exclude** Windows Defender, macOS Gatekeeper, or third-party antivirus/firewall products.
+- No rootkit, kernel driver, or hidden background process is ever deployed.
+- The participant is fully in control and informed before monitoring commences.
+

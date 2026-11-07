@@ -48,6 +48,22 @@ impl LocalAiSummarizer {
             }
         }
 
+        let compiler_events = report
+            .timeline
+            .iter()
+            .filter(|e| e.category == "Compiler")
+            .count();
+        if compiler_events > 0 {
+            facts.push(format!(
+                "Built-in C++ compiler activity recorded: {compiler_events} compilation/execution events in hash chain."
+            ));
+        } else {
+            inferences.push(
+                "INFERENCE: No built-in compiler events recorded. Note: Absence of compiler events is not proof that no external compiler was used."
+                    .to_string(),
+            );
+        }
+
         // 2. Contextual Inferences
         match report.classification {
             VerdictClassification::Safe => {

@@ -34,7 +34,9 @@ jobs:
 
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsqlite3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -93,11 +95,12 @@ jobs:
         with:
           path: release-artifacts
 
-      - name: Generate Consolidated Checksums
+      - name: Generate Consolidated Checksums and SBOM
         run: |
           cd release-artifacts
           find . -type f \( -name "*.zip" -o -name "*.tar.gz" \) -exec sha256sum {} + > SHA256SUMS.txt
           cat SHA256SUMS.txt
+          echo '{"spdxVersion":"SPDX-2.3","name":"Warm-AntiCheat","packages":[{"name":"warm-anticheat","versionInfo":"0.1.0","licenseConcluded":"GPL-3.0-only"}]}' > sbom.spdx.json
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -106,6 +109,7 @@ jobs:
             release-artifacts/**/*.zip
             release-artifacts/**/*.tar.gz
             release-artifacts/SHA256SUMS.txt
+            release-artifacts/sbom.spdx.json
           draft: false
           prerelease: false
           generate_release_notes: true

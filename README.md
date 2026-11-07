@@ -30,6 +30,7 @@ Warm-AntiCheat/
 │   ├── storage/        # Encrypted SQLite storage, sequence trackers & USB export
 │   ├── policies/       # Restricted domains, prohibited application definitions
 │   ├── platform/       # Windows, Linux, and macOS process & lifecycle collectors
+│   ├── compiler/       # Built-in offline C++23 compiler engine & isolated runner
 │   ├── verifier/       # Policy evaluation & evidence classification (SAFE / UNSAFE / REVIEW REQUIRED)
 │   ├── audit/          # Deterministic timeline correlation & optional offline AI summarizer
 │   └── builder_core/   # Output dist packager & manifest signing engine
@@ -62,6 +63,8 @@ Warm-AntiCheat/
 - [Cryptographic Specification](CRYPTOGRAPHY.md)
 - [Privacy Notice & Retention Disclosure](PRIVACY.md)
 - [Building & Toolchain Setup](BUILDING.md)
+- [Built-in Offline C++ Compiler Guide](COMPILER_GUIDE.md)
+- [Antivirus Compatibility & False-Positive Prevention](ANTIVIRUS_COMPATIBILITY.md)
 - [Release Verification & Code Signing](RELEASE_VERIFICATION.md)
 - [Contest Builder User Guide](BUILDER_GUIDE.md)
 - [Participant Client User Guide](PARTICIPANT_GUIDE.md)

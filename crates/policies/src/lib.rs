@@ -16,6 +16,8 @@ pub struct MonitoringPolicy {
     pub heartbeat_interval_secs: u64,
     pub max_interruption_gap_secs: u64,
     pub retention_days: u32,
+    #[serde(default)]
+    pub enable_cpp_compiler: bool,
 }
 
 impl Default for MonitoringPolicy {
@@ -26,6 +28,7 @@ impl Default for MonitoringPolicy {
             heartbeat_interval_secs: 15,
             max_interruption_gap_secs: 60,
             retention_days: 30,
+            enable_cpp_compiler: false,
         }
     }
 }

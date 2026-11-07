@@ -12,10 +12,15 @@ warm_events.workspace = true
 warm_storage.workspace = true
 warm_policies.workspace = true
 warm_platform.workspace = true
-uuid.workspace = true
-chrono.workspace = true
+warm_compiler.workspace = true
+uuid = { workspace = true }
+chrono = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+tauri.workspace = true
+
+[build-dependencies]
+tauri-build.workspace = true

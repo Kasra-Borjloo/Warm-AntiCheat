@@ -198,7 +198,28 @@ impl ForensicVerifier {
                 }
             }
 
-            // C. Check for Monitoring Gaps & Sleep Interruptions
+            // C. Check for Compiler Activity & Resource Violations
+            if event.category == "Compiler" {
+                if let Ok(compiler_payload) = serde_json::from_value::<
+                    warm_events::CompilerEventPayload,
+                >(payload_value.clone())
+                {
+                    if let Some(ref violation) = compiler_payload.resource_violations {
+                        findings.push(ForensicFinding {
+                            severity: FindingSeverity::Warning,
+                            title: "Compiler Resource Limit Exceeded".to_string(),
+                            description: format!(
+                                "Compiled executable triggered resource limit: {violation} (Source: {})",
+                                compiler_payload.source_path
+                            ),
+                            supporting_sequences: vec![event.sequence_number],
+                            timestamps: vec![event.timestamp_rfc3339.clone()],
+                        });
+                    }
+                }
+            }
+
+            // D. Check for Monitoring Gaps & Sleep Interruptions
             if let Ok(dt) = DateTime::parse_from_rfc3339(&event.timestamp_rfc3339) {
                 let dt_utc = dt.with_timezone(&Utc);
                 if let Some(prev_time) = last_heartbeat_time {
