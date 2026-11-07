@@ -9,6 +9,7 @@ license.workspace = true
 warm_core.workspace = true
 warm_events.workspace = true
 warm_verifier.workspace = true
+uuid.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

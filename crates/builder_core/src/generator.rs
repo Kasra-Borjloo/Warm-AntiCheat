@@ -118,9 +118,8 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
     let signed_manifest = manifest.sign(&signing_keypair)?;
 
     // 4. Write manifest files
-    let manifest_json = serde_json::to_string_pretty(&signed_manifest.manifest)
-        .map_err(|e| WarmError::Serialization(e.to_string()))?;
-    fs::write(manifests_dir.join("contest_manifest.json"), &manifest_json)
+    let manifest_bytes = signed_manifest.manifest.canonical_bytes()?;
+    fs::write(manifests_dir.join("contest_manifest.json"), &manifest_bytes)
         .map_err(|e| WarmError::Io(e.to_string()))?;
     fs::write(
         manifests_dir.join("contest_manifest.json.sig"),
@@ -209,7 +208,7 @@ warm_judge_app verify-manifest \
     // 9. Generate Checksums
     let checksum_content = format!(
         "{manifest_hash}  manifests/contest_manifest.json\n",
-        manifest_hash = sha256_digest(manifest_json.as_bytes()),
+        manifest_hash = sha256_digest(&manifest_bytes),
     );
     let checksums_path = checksums_dir.join("SHA256SUMS.txt");
     fs::write(&checksums_path, checksum_content).map_err(|e| WarmError::Io(e.to_string()))?;

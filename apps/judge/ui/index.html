@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warm-AntiCheat | Judge Verifier</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="judge-layout">
+    <!-- Sidebar: Contests & Participants List -->
+    <aside class="judge-sidebar">
+      <div class="sidebar-header">
+        <div class="brand-row">
+          <span class="icon">⚖️</span>
+          <h2>Judge Verifier</h2>
+        </div>
+        <span class="version-label">Warm-AntiCheat Jury Portal v0.1.0</span>
+      </div>
+
+      <div class="key-status-box">
+        <label>Judge Decryption Key:</label>
+        <span class="key-badge text-success">✔ Key Loaded (X25519)</span>
+      </div>
+
+      <div class="section-title">
+        <span>Participants Submissions</span>
+        <button class="btn btn-sm btn-secondary" id="importBtn">+ Import Archive</button>
+      </div>
+
+      <div class="participants-list" id="participantsList">
+        <!-- Dynamically rendered participant cards -->
+      </div>
+
+      <div class="sidebar-footer">
+        <button class="btn btn-secondary btn-sm" id="themeToggle">Toggle Theme</button>
+      </div>
+    </aside>
+
+    <!-- Main Inspection Area -->
+    <main class="judge-main">
+      <header class="main-header">
+        <div>
+          <span class="contest-subtitle">ACTIVE CONTEST: GOCUP 1</span>
+          <h1 id="selectedParticipantTitle">Select a participant to review</h1>
+        </div>
+        <div class="verdict-banner" id="verdictBanner" style="display: none;">
+          <span class="verdict-pill" id="verdictPill">SAFE</span>
+        </div>
+      </header>
+
+      <div id="inspectorContent" style="display: none;">
+        <!-- Top Stats Row -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <span class="label">Hash Chain</span>
+            <span class="value text-success" id="statHashChain">VERIFIED (SHA-256)</span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Total Events</span>
+            <span class="value" id="statTotalEvents">142</span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Critical Findings</span>
+            <span class="value text-danger" id="statCriticalFindings">0</span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Monitoring Gaps</span>
+            <span class="value" id="statGaps">0</span>
+          </div>
+        </div>
+
+        <!-- Key Findings Card -->
+        <div class="card mt-4" id="findingsCard">
+          <h3>Forensic Findings & Violations</h3>
+          <div class="findings-list" id="findingsList">
+            <!-- Rendered findings -->
+          </div>
+        </div>
+
+        <!-- AI Advisory Card -->
+        <div class="card mt-4 ai-card">
+          <div class="ai-header">
+            <h3>🤖 Advisory AI Forensic Summary</h3>
+            <span class="badge badge-warning">Advisory Only - Human Review Mandatory</span>
+          </div>
+          <div class="ai-body" id="aiSummaryBody">
+            <!-- Facts vs Inferences -->
+          </div>
+        </div>
+
+        <!-- Timeline Card -->
+        <div class="card mt-4">
+          <div class="timeline-header">
+            <h3>Audit Event Timeline</h3>
+            <div class="filter-buttons">
+              <button class="filter-btn active" data-cat="all">All</button>
+              <button class="filter-btn" data-cat="Process">Process</button>
+              <button class="filter-btn" data-cat="Browser">Browser</button>
+              <button class="filter-btn" data-cat="Network">Network</button>
+              <button class="filter-btn" data-cat="SystemLifecycle">Lifecycle</button>
+            </div>
+          </div>
+
+          <div class="timeline-table-container">
+            <table class="timeline-table">
+              <thead>
+                <tr>
+                  <th>Seq</th>
+                  <th>Timestamp (UTC)</th>
+                  <th>Category</th>
+                  <th>Payload Event Details</th>
+                  <th>Event Hash</th>
+                </tr>
+              </thead>
+              <tbody id="timelineTbody">
+                <!-- Timeline rows -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Judge Notes & Action -->
+        <div class="card mt-4">
+          <h3>Judge Notes & Decision</h3>
+          <textarea id="judgeNotes" placeholder="Enter confidential jury rationale and observations here..."></textarea>
+          <div class="action-row mt-2">
+            <button class="btn btn-primary" id="saveDecisionBtn">Save Official Verdict</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

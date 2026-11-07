@@ -18,7 +18,8 @@ pub struct ContestManifest {
 
 impl ContestManifest {
     pub fn canonical_bytes(&self) -> Result<Vec<u8>> {
-        serde_json::to_vec(self)
+        serde_json::to_string_pretty(self)
+            .map(|s| s.into_bytes())
             .map_err(|e| WarmError::Serialization(format!("Manifest serialization error: {e}")))
     }
 
