@@ -43,6 +43,8 @@ pub struct ContestDistBundle {
     pub participant_client_path: Option<PathBuf>,
 }
 
+const WEBVIEW2_LOADER_X64: &[u8] = include_bytes!("../../../assets/windows/x64/WebView2Loader.dll");
+
 fn locate_participant_binary() -> Option<PathBuf> {
     let mut candidates = Vec::new();
 
@@ -54,8 +56,12 @@ fn locate_participant_binary() -> Option<PathBuf> {
         if let Some(dir) = exe.parent() {
             candidates.push(dir.join("warm_participant_app.exe"));
             candidates.push(dir.join("warm_participant_app"));
+            candidates.push(dir.join("bin/warm_participant_app.exe"));
+            candidates.push(dir.join("bin/warm_participant_app"));
             candidates.push(dir.join("../warm_participant_app.exe"));
             candidates.push(dir.join("../warm_participant_app"));
+            candidates.push(dir.join("../bin/warm_participant_app.exe"));
+            candidates.push(dir.join("../bin/warm_participant_app"));
         }
     }
 
@@ -73,6 +79,50 @@ fn locate_participant_binary() -> Option<PathBuf> {
     candidates.push(PathBuf::from(
         "../../target/release/warm_participant_app.exe",
     ));
+    candidates.push(PathBuf::from("./target/debug/warm_participant_app"));
+    candidates.push(PathBuf::from("./target/release/warm_participant_app"));
+    candidates.push(PathBuf::from("../target/debug/warm_participant_app"));
+    candidates.push(PathBuf::from("../target/release/warm_participant_app"));
+    candidates.push(PathBuf::from("../../target/debug/warm_participant_app"));
+    candidates.push(PathBuf::from("../../target/release/warm_participant_app"));
+
+    candidates.into_iter().find(|c| c.exists() && c.is_file())
+}
+
+fn locate_judge_binary() -> Option<PathBuf> {
+    let mut candidates = Vec::new();
+
+    if let Ok(p) = std::env::var("WARM_JUDGE_BIN") {
+        candidates.push(PathBuf::from(p));
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("warm_judge_app.exe"));
+            candidates.push(dir.join("warm_judge_app"));
+            candidates.push(dir.join("bin/warm_judge_app.exe"));
+            candidates.push(dir.join("bin/warm_judge_app"));
+            candidates.push(dir.join("../warm_judge_app.exe"));
+            candidates.push(dir.join("../warm_judge_app"));
+            candidates.push(dir.join("../bin/warm_judge_app.exe"));
+            candidates.push(dir.join("../bin/warm_judge_app"));
+        }
+    }
+
+    candidates.push(PathBuf::from("C:/warm_target/debug/warm_judge_app.exe"));
+    candidates.push(PathBuf::from("C:/warm_target/release/warm_judge_app.exe"));
+    candidates.push(PathBuf::from("./target/debug/warm_judge_app.exe"));
+    candidates.push(PathBuf::from("./target/release/warm_judge_app.exe"));
+    candidates.push(PathBuf::from("../target/debug/warm_judge_app.exe"));
+    candidates.push(PathBuf::from("../target/release/warm_judge_app.exe"));
+    candidates.push(PathBuf::from("../../target/debug/warm_judge_app.exe"));
+    candidates.push(PathBuf::from("../../target/release/warm_judge_app.exe"));
+    candidates.push(PathBuf::from("./target/debug/warm_judge_app"));
+    candidates.push(PathBuf::from("./target/release/warm_judge_app"));
+    candidates.push(PathBuf::from("../target/debug/warm_judge_app"));
+    candidates.push(PathBuf::from("../target/release/warm_judge_app"));
+    candidates.push(PathBuf::from("../../target/debug/warm_judge_app"));
+    candidates.push(PathBuf::from("../../target/release/warm_judge_app"));
 
     candidates.into_iter().find(|c| c.exists() && c.is_file())
 }
@@ -213,21 +263,55 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
 
     if let Some(src_bin) = locate_participant_binary() {
         if let Ok(bin_bytes) = fs::read(&src_bin) {
-            let win_exe_target = client_win_dir.join("Warm-AntiCheat-Participant.exe");
-            let _ = fs::write(&win_exe_target, &bin_bytes);
-            let win_hash = sha256_digest(&bin_bytes);
-            binary_checksums.insert("windows-x86_64".to_string(), win_hash);
-            copied_participant_client = Some(win_exe_target);
+            let is_pe = bin_bytes.starts_with(b"MZ");
+            if is_pe {
+                let win_exe_target = client_win_dir.join("Warm-AntiCheat-Participant.exe");
+                let _ = fs::write(&win_exe_target, &bin_bytes);
+                let win_hash = sha256_digest(&bin_bytes);
+                binary_checksums.insert("windows-x86_64".to_string(), win_hash);
+                copied_participant_client = Some(win_exe_target);
 
-            let bat_content = "@echo off\r\nstart \"\" \"%~dp0Warm-AntiCheat-Participant.exe\"\r\n";
-            let _ = fs::write(client_win_dir.join("Run-Contest.bat"), bat_content);
+                let bat_content =
+                    "@echo off\r\nstart \"\" \"%~dp0Warm-AntiCheat-Participant.exe\"\r\n";
+                let _ = fs::write(client_win_dir.join("Run-Contest.bat"), bat_content);
+                let _ = fs::write(
+                    client_win_dir.join("WebView2Loader.dll"),
+                    WEBVIEW2_LOADER_X64,
+                );
+            } else {
+                let linux_exe_target = client_linux_dir.join("warm_participant_app");
+                let _ = fs::write(&linux_exe_target, &bin_bytes);
+                let hash = sha256_digest(&bin_bytes);
+                binary_checksums.insert("linux-x86_64".to_string(), hash);
+                copied_participant_client = Some(linux_exe_target);
+            }
         }
     } else {
         binary_checksums.insert("windows-x86_64".to_string(), "PENDING_BUILD".to_string());
     }
 
-    binary_checksums.insert("linux-x86_64".to_string(), "PENDING_BUILD".to_string());
+    if !binary_checksums.contains_key("linux-x86_64") {
+        binary_checksums.insert("linux-x86_64".to_string(), "PENDING_BUILD".to_string());
+    }
     binary_checksums.insert("macos-universal".to_string(), "PENDING_BUILD".to_string());
+
+    if let Some(judge_bin) = locate_judge_binary() {
+        if let Ok(judge_bytes) = fs::read(&judge_bin) {
+            let is_pe = judge_bytes.starts_with(b"MZ");
+            if is_pe {
+                let win_judge_target = judge_dir.join("Warm-AntiCheat-Judge.exe");
+                let _ = fs::write(&win_judge_target, &judge_bytes);
+                let bat_content = "@echo off\r\nstart \"\" \"%~dp0Warm-AntiCheat-Judge.exe\"\r\n";
+                let _ = fs::write(judge_dir.join("Launch-Judge.bat"), bat_content);
+                let _ = fs::write(judge_dir.join("WebView2Loader.dll"), WEBVIEW2_LOADER_X64);
+            } else {
+                let unix_judge_target = judge_dir.join("warm_judge_app");
+                let _ = fs::write(&unix_judge_target, &judge_bytes);
+                let sh_content = "#!/bin/sh\nDIR=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\nexec \"$DIR/warm_judge_app\" \"$@\"\n";
+                let _ = fs::write(judge_dir.join("Launch-Judge.sh"), sh_content);
+            }
+        }
+    }
 
     let manifest = ContestManifest {
         contest: contest.clone(),
@@ -242,6 +326,9 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
     let signed_manifest = manifest.sign(&signing_keypair)?;
 
     let manifest_bytes = signed_manifest.manifest.canonical_bytes()?;
+    let signed_manifest_bytes = serde_json::to_vec_pretty(&signed_manifest)
+        .map_err(|e| WarmError::Serialization(e.to_string()))?;
+
     fs::write(manifests_dir.join("contest_manifest.json"), &manifest_bytes)
         .map_err(|e| WarmError::Io(e.to_string()))?;
     fs::write(
@@ -249,6 +336,10 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
         &signed_manifest.signature_hex,
     )
     .map_err(|e| WarmError::Io(e.to_string()))?;
+    let _ = fs::write(
+        manifests_dir.join("contest_signed_manifest.json"),
+        &signed_manifest_bytes,
+    );
 
     let _ = fs::write(
         client_win_dir.join("contest_manifest.json"),
@@ -257,6 +348,46 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
     let _ = fs::write(
         client_win_dir.join("contest_manifest.json.sig"),
         &signed_manifest.signature_hex,
+    );
+    let _ = fs::write(
+        client_win_dir.join("contest_signed_manifest.json"),
+        &signed_manifest_bytes,
+    );
+
+    let _ = fs::write(
+        client_linux_dir.join("contest_manifest.json"),
+        &manifest_bytes,
+    );
+    let _ = fs::write(
+        client_linux_dir.join("contest_manifest.json.sig"),
+        &signed_manifest.signature_hex,
+    );
+    let _ = fs::write(
+        client_linux_dir.join("contest_signed_manifest.json"),
+        &signed_manifest_bytes,
+    );
+
+    let _ = fs::write(
+        client_macos_dir.join("contest_manifest.json"),
+        &manifest_bytes,
+    );
+    let _ = fs::write(
+        client_macos_dir.join("contest_manifest.json.sig"),
+        &signed_manifest.signature_hex,
+    );
+    let _ = fs::write(
+        client_macos_dir.join("contest_signed_manifest.json"),
+        &signed_manifest_bytes,
+    );
+
+    let _ = fs::write(judge_dir.join("contest_manifest.json"), &manifest_bytes);
+    let _ = fs::write(
+        judge_dir.join("contest_manifest.json.sig"),
+        &signed_manifest.signature_hex,
+    );
+    let _ = fs::write(
+        judge_dir.join("contest_signed_manifest.json"),
+        &signed_manifest_bytes,
     );
 
     let config_json = serde_json::to_string_pretty(&contest)
@@ -290,6 +421,19 @@ pub fn generate_contest_distribution(config: &ContestBuildConfig) -> Result<Cont
     );
     let _ = fs::write(
         client_win_cfg.join("manifest_signing_key.pub"),
+        signing_keypair.public_key_hex(),
+    );
+
+    let judge_cfg = judge_dir.join("configuration");
+    let _ = fs::create_dir_all(&judge_cfg);
+    let _ = fs::write(judge_cfg.join("contest_config.json"), &config_json);
+    let _ = fs::write(judge_cfg.join("policies.json"), &policies_json);
+    let _ = fs::write(
+        judge_cfg.join("judge_evidence_key.pub"),
+        judge_keypair.public_key_hex(),
+    );
+    let _ = fs::write(
+        judge_cfg.join("manifest_signing_key.pub"),
         signing_keypair.public_key_hex(),
     );
 

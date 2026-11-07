@@ -192,20 +192,44 @@ fn locate_and_load_manifest() -> Option<SignedContestManifest> {
 
     if let Ok(exe) = env::current_exe() {
         if let Some(parent) = exe.parent() {
+            candidates.push(parent.join("contest_signed_manifest.json"));
             candidates.push(parent.join("contest_manifest.json"));
+            candidates.push(
+                parent
+                    .join("manifests")
+                    .join("contest_signed_manifest.json"),
+            );
             candidates.push(parent.join("manifests").join("contest_manifest.json"));
             if let Some(grandparent) = parent.parent() {
+                candidates.push(
+                    grandparent
+                        .join("manifests")
+                        .join("contest_signed_manifest.json"),
+                );
                 candidates.push(grandparent.join("manifests").join("contest_manifest.json"));
+                candidates.push(grandparent.join("contest_signed_manifest.json"));
                 candidates.push(grandparent.join("contest_manifest.json"));
             }
         }
     }
 
+    candidates.push(PathBuf::from("./contest_signed_manifest.json"));
     candidates.push(PathBuf::from("./contest_manifest.json"));
+    candidates.push(PathBuf::from("./manifests/contest_signed_manifest.json"));
     candidates.push(PathBuf::from("./manifests/contest_manifest.json"));
+    candidates.push(PathBuf::from("../manifests/contest_signed_manifest.json"));
     candidates.push(PathBuf::from("../manifests/contest_manifest.json"));
+    candidates.push(PathBuf::from(
+        "../../manifests/contest_signed_manifest.json",
+    ));
     candidates.push(PathBuf::from("../../manifests/contest_manifest.json"));
+    candidates.push(PathBuf::from(
+        "./client/windows/contest_signed_manifest.json",
+    ));
     candidates.push(PathBuf::from("./client/windows/contest_manifest.json"));
+    candidates.push(PathBuf::from(
+        "../client/windows/contest_signed_manifest.json",
+    ));
     candidates.push(PathBuf::from("../client/windows/contest_manifest.json"));
 
     for path in candidates {
@@ -214,6 +238,29 @@ fn locate_and_load_manifest() -> Option<SignedContestManifest> {
                 if let Ok(signed) = serde_json::from_str::<SignedContestManifest>(&content) {
                     if signed.verify().is_ok() {
                         return Some(signed);
+                    }
+                }
+                if let Ok(manifest) =
+                    serde_json::from_str::<warm_builder_core::ContestManifest>(&content)
+                {
+                    let mut sig_candidates = Vec::new();
+                    sig_candidates.push(PathBuf::from(format!("{}.sig", path.display())));
+                    sig_candidates.push(path.with_extension("json.sig"));
+                    if let Some(parent) = path.parent() {
+                        sig_candidates.push(parent.join("contest_manifest.json.sig"));
+                    }
+                    for sig_p in sig_candidates {
+                        if sig_p.exists() {
+                            if let Ok(sig_hex) = fs::read_to_string(&sig_p) {
+                                let signed = SignedContestManifest {
+                                    manifest: manifest.clone(),
+                                    signature_hex: sig_hex.trim().to_string(),
+                                };
+                                if signed.verify().is_ok() {
+                                    return Some(signed);
+                                }
+                            }
+                        }
                     }
                 }
             }

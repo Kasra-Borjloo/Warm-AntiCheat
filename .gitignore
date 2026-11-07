@@ -7,6 +7,7 @@ node_modules/
 Thumbs.db
 *.exe
 *.dll
+!assets/windows/**/*.dll
 *.so
 *.dylib
 *.pdb

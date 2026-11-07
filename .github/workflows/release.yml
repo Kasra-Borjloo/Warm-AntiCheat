@@ -59,7 +59,12 @@ jobs:
         shell: pwsh
         run: |
           mkdir staging
+          mkdir staging/bin
           Copy-Item target/${{ matrix.target }}/release/warm_builder_app.exe staging/warm-contest-maker.exe
+          Copy-Item assets/windows/x64/WebView2Loader.dll staging/WebView2Loader.dll
+          Copy-Item target/${{ matrix.target }}/release/warm_participant_app.exe staging/bin/warm_participant_app.exe
+          Copy-Item target/${{ matrix.target }}/release/warm_judge_app.exe staging/bin/warm_judge_app.exe
+          Copy-Item assets/windows/x64/WebView2Loader.dll staging/bin/WebView2Loader.dll
           Copy-Item README.md staging/
           Copy-Item LICENSE staging/
           Compress-Archive -Path staging/* -DestinationPath ${{ matrix.artifact_name }}
@@ -68,7 +73,12 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir staging
+          mkdir -p staging/bin
           cp target/${{ matrix.target }}/release/warm_builder_app staging/warm-contest-maker
+          cp target/${{ matrix.target }}/release/warm_participant_app staging/bin/warm_participant_app
+          chmod +x staging/bin/warm_participant_app
+          cp target/${{ matrix.target }}/release/warm_judge_app staging/bin/warm_judge_app
+          chmod +x staging/bin/warm_judge_app
           chmod +x staging/warm-contest-maker
           cp README.md staging/
           cp LICENSE staging/
