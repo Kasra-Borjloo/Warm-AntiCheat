@@ -81,7 +81,7 @@ impl ExecutionRunner {
                 format!("{};C:\\Windows\\System32", bin_dir.display()),
             );
             #[cfg(not(target_os = "windows"))]
-            cmd.env("PATH", format!("{}:/usr/lib:/lib", bin_dir.display()));
+            cmd.env("PATH", format!("{}:/usr/bin:/bin", bin_dir.display()));
         }
 
         let mut child = match cmd.spawn() {

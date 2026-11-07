@@ -121,7 +121,7 @@ impl CompilerEngine {
             );
         }
         #[cfg(not(target_os = "windows"))]
-        cmd.env("PATH", format!("{}:/usr/lib:/lib", bin_dir.display()));
+        cmd.env("PATH", format!("{}:/usr/bin:/bin", bin_dir.display()));
 
         let compile_output = cmd
             .output()

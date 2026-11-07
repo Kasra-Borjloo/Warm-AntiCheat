@@ -151,7 +151,7 @@ impl BundledToolchain {
         }
         #[cfg(not(target_os = "windows"))]
         {
-            let isolated_path = format!("{}:/usr/lib:/lib", bin_dir.display());
+            let isolated_path = format!("{}:/usr/bin:/bin", bin_dir.display());
             cmd.env("PATH", isolated_path);
         }
 
@@ -229,7 +229,7 @@ int main() {
             format!("{};C:\\Windows\\System32", bin_dir.display()),
         );
         #[cfg(not(target_os = "windows"))]
-        cmd.env("PATH", format!("{}:/usr/lib:/lib", bin_dir.display()));
+        cmd.env("PATH", format!("{}:/usr/bin:/bin", bin_dir.display()));
 
         match cmd.output() {
             Ok(output) if output.status.success() => Ok(true),

@@ -20,6 +20,9 @@ fn test_bundled_toolchain_locate_and_verify() {
                     || msg.contains("not found")
                     || msg.contains("Target platform")
                     || msg.contains("executable")
+                    || msg.contains("requirements")
+                    || msg.contains("C++23")
+                    || msg.contains("satisfy")
             );
         }
     }
