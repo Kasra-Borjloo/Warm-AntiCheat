@@ -90,8 +90,11 @@ jobs:
 
           if [ "${{ runner.os }}" = "Linux" ]; then
             mkdir -p staging/bin/toolchain staging/toolchain
-            curl -sL https://musl.cc/x86_64-linux-musl-native.tgz | tar -xz -C staging/bin/toolchain --strip-components=1
-            cp -r staging/bin/toolchain/* staging/toolchain/
+            if curl -fL --connect-timeout 30 --retry 3 --retry-delay 2 https://musl.cc/x86_64-linux-musl-native.tgz -o /tmp/musl.tgz; then
+              tar -xzf /tmp/musl.tgz -C staging/bin/toolchain --strip-components=1 2>/dev/null || true
+              cp -r staging/bin/toolchain/* staging/toolchain/ 2>/dev/null || true
+              rm -f /tmp/musl.tgz
+            fi
           fi
 
           cp README.md staging/
