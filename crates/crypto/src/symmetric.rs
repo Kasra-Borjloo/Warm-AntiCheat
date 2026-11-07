@@ -20,6 +20,10 @@ pub struct SealedPayload {
     pub ciphertext_hex: String,
 }
 
+pub fn generate_random_bytes(dest: &mut [u8]) {
+    OsRng.fill_bytes(dest);
+}
+
 pub fn derive_symmetric_key(
     shared_secret: &[u8; 32],
     salt: &[u8],

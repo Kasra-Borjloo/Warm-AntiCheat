@@ -125,13 +125,95 @@ struct ActiveSession {
     manifest_signature_hex: String,
     store: SqliteAuditStore,
     tracker: Mutex<HashChainTracker>,
-    db_path: PathBuf,
+    _db_path: PathBuf,
     authenticated_account_id: Option<Uuid>,
     concluded: AtomicBool,
     start_time: Instant,
+    vault_key: [u8; 32],
 }
 
 impl ActiveSession {
+    fn encrypt_and_store_screenshot(
+        &self,
+        bmp_bytes: &[u8],
+        filename: &str,
+    ) -> Result<PathBuf, String> {
+        let vault_dir = PathBuf::from("./session_data/vault");
+        fs::create_dir_all(&vault_dir).map_err(|e| e.to_string())?;
+        let mut nonce = [0u8; 12];
+        warm_crypto::generate_random_bytes(&mut nonce);
+        let ciphertext = warm_crypto::aes_gcm_encrypt(
+            &self.vault_key,
+            &nonce,
+            bmp_bytes,
+            filename.as_bytes(),
+        )
+        .map_err(|e| e.to_string())?;
+
+        let mut payload = Vec::with_capacity(12 + ciphertext.len());
+        payload.extend_from_slice(&nonce);
+        payload.extend_from_slice(&ciphertext);
+
+        let enc_filename = format!("{}.enc", filename);
+        let enc_path = vault_dir.join(&enc_filename);
+        fs::write(&enc_path, payload).map_err(|e| e.to_string())?;
+        Ok(enc_path)
+    }
+
+    fn read_and_decrypt_screenshots(&self) -> Vec<(String, Vec<u8>)> {
+        let mut attachments = Vec::new();
+        let vault_dir = PathBuf::from("./session_data/vault");
+        if vault_dir.exists() {
+            if let Ok(entries) = fs::read_dir(&vault_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() {
+                        let name_str = path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string();
+                        if let Some(orig_name) = name_str.strip_suffix(".enc") {
+                            if let Ok(data) = fs::read(&path) {
+                                if data.len() >= 12 {
+                                    let (nonce, ciphertext) = data.split_at(12);
+                                    let mut nonce_arr = [0u8; 12];
+                                    nonce_arr.copy_from_slice(nonce);
+                                    if let Ok(decrypted) = warm_crypto::aes_gcm_decrypt(
+                                        &self.vault_key,
+                                        &nonce_arr,
+                                        ciphertext,
+                                        orig_name.as_bytes(),
+                                    ) {
+                                        attachments.push((orig_name.to_string(), decrypted));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let legacy_dir = PathBuf::from("./session_data/screenshots");
+        if legacy_dir.exists() {
+            if let Ok(entries) = fs::read_dir(&legacy_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() {
+                        if let Ok(content) = fs::read(&path) {
+                            let filename = path
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .to_string();
+                            attachments.push((filename, content));
+                        }
+                    }
+                }
+            }
+        }
+        attachments
+    }
     fn record_event(&self, category: EventCategory, payload_json: &[u8]) -> Result<u64, String> {
         let payload_hash = sha256_digest(payload_json);
         let now = Utc::now();
@@ -357,25 +439,7 @@ fn package_and_export_warmac(
 ) -> Result<(PathBuf, String), String> {
     fs::create_dir_all(target_dir).map_err(|e| e.to_string())?;
 
-    let mut attachments = Vec::new();
-    let screenshots_dir = PathBuf::from("./session_data/screenshots");
-    if screenshots_dir.exists() {
-        if let Ok(entries) = fs::read_dir(&screenshots_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_file() {
-                    if let Ok(content) = fs::read(&path) {
-                        let filename = path
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .to_string();
-                        attachments.push((filename, content));
-                    }
-                }
-            }
-        }
-    }
+    let attachments = session.read_and_decrypt_screenshots();
 
     let warmac_path = target_dir.join(format!(
         "{}_{}.warmac",
@@ -401,22 +465,18 @@ fn package_and_export_warmac(
     let warmac_bytes = fs::read(&warmac_path).map_err(|e| e.to_string())?;
     let checksum = warm_crypto::sha256_digest(&warmac_bytes);
 
-    let (last_seq, last_h) = session
-        .store
-        .get_latest_event_info()
-        .unwrap_or(None)
-        .unwrap_or((0, String::new()));
-    let genesis_h = compute_genesis_hash(&session.contest_uuid, &session.participant_id);
-    let _ = export_evidence_package(
-        &session.db_path,
-        target_dir,
-        session.contest_uuid,
-        &session.participant_id,
-        session.session_id,
-        last_seq,
-        &last_h,
-        &genesis_h,
-    );
+    let vault_dir = PathBuf::from("./session_data/vault");
+    if vault_dir.exists() {
+        let _ = fs::remove_dir_all(&vault_dir);
+    }
+    let screenshots_dir = PathBuf::from("./session_data/screenshots");
+    if screenshots_dir.exists() {
+        let _ = fs::remove_dir_all(&screenshots_dir);
+    }
+    let vault_key_path = PathBuf::from("./session_data/.vault.key");
+    if vault_key_path.exists() {
+        let _ = fs::remove_file(&vault_key_path);
+    }
 
     Ok((warmac_path, checksum))
 }
@@ -455,9 +515,10 @@ fn start_collector_loop(session: Arc<ActiveSession>, policy: MonitoringPolicy) {
                         let sha = warm_crypto::sha256_digest(&bmp_bytes);
                         let size = bmp_bytes.len() as u64;
 
-                        let screenshots_dir = PathBuf::from("./session_data/screenshots");
-                        if fs::create_dir_all(&screenshots_dir).is_ok() {
-                            let _ = fs::write(screenshots_dir.join(&filename), &bmp_bytes);
+                        if session
+                            .encrypt_and_store_screenshot(&bmp_bytes, &filename)
+                            .is_ok()
+                        {
                             proc_payload.screenshot_attachment =
                                 Some(warm_events::EvidenceAttachmentRef {
                                     attachment_id: att_id,
@@ -490,9 +551,10 @@ fn start_collector_loop(session: Arc<ActiveSession>, policy: MonitoringPolicy) {
                         let sha = warm_crypto::sha256_digest(&bmp_bytes);
                         let size = bmp_bytes.len() as u64;
 
-                        let screenshots_dir = PathBuf::from("./session_data/screenshots");
-                        if fs::create_dir_all(&screenshots_dir).is_ok() {
-                            let _ = fs::write(screenshots_dir.join(&filename), &bmp_bytes);
+                        if session
+                            .encrypt_and_store_screenshot(&bmp_bytes, &filename)
+                            .is_ok()
+                        {
                             b_event.screenshot_attachment =
                                 Some(warm_events::EvidenceAttachmentRef {
                                     attachment_id: att_id,
@@ -782,6 +844,32 @@ fn start_monitoring_session(participant_id: String) -> Result<String, String> {
         ),
     };
 
+    let vault_key_path = session_dir.join(".vault.key");
+    let vault_key = if vault_key_path.exists() {
+        fs::read(&vault_key_path)
+            .ok()
+            .and_then(|b| {
+                if b.len() == 32 {
+                    let mut k = [0u8; 32];
+                    k.copy_from_slice(&b);
+                    Some(k)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| {
+                let mut k = [0u8; 32];
+                warm_crypto::generate_random_bytes(&mut k);
+                let _ = fs::write(&vault_key_path, k);
+                k
+            })
+    } else {
+        let mut k = [0u8; 32];
+        warm_crypto::generate_random_bytes(&mut k);
+        let _ = fs::write(&vault_key_path, k);
+        k
+    };
+
     let session = Arc::new(ActiveSession {
         contest_id,
         contest_uuid,
@@ -793,10 +881,11 @@ fn start_monitoring_session(participant_id: String) -> Result<String, String> {
         manifest_signature_hex: manifest_sig_hex,
         store,
         tracker: Mutex::new(tracker),
-        db_path,
+        _db_path: db_path,
         authenticated_account_id,
         concluded: AtomicBool::new(false),
         start_time: Instant::now(),
+        vault_key,
     });
 
     if is_resumed {
